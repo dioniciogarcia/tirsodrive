@@ -11,6 +11,7 @@ import '../core/native.dart';
 import '../core/strings.dart';
 import 'channel_screen.dart';
 import 'library_screen.dart';
+import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'theme.dart';
 import 'transfers_screen.dart';
@@ -97,6 +98,7 @@ class _DesktopShellState extends State<DesktopShell> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
         children: [
+          _navItem('search', t('search_title'), C.accentSoft),
           _label(t('section_library')),
           for (final c in libraryCategories) _navItem('cat:${c.key}', c.label(appLang), c.color),
           Row(children: [
@@ -141,7 +143,33 @@ class _DesktopShellState extends State<DesktopShell> {
         Container(width: 8, height: 8, decoration: BoxDecoration(color: online ? C.green : C.amber, shape: BoxShape.circle)),
         const SizedBox(width: 8),
         Text(online ? t('status_online') : t('status_connecting'), style: const TextStyle(fontSize: 13, color: C.muted)),
-        const Spacer(),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Material(
+                color: C.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: C.border)),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => setState(() => _sel = 'search'),
+                  child: SizedBox(
+                    height: 38,
+                    child: Row(children: [
+                      const SizedBox(width: 12),
+                      const Icon(Icons.search, size: 18, color: C.muted),
+                      const SizedBox(width: 10),
+                      Text(t('search_hint'), style: const TextStyle(color: C.muted, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
         if (!Platform.isAndroid) ...[
           OutlinedButton.icon(
             onPressed: () => pickAndUpload(context, d, folder: true),
@@ -213,6 +241,7 @@ class _DesktopShellState extends State<DesktopShell> {
   }
 
   Widget _content() {
+    if (_sel == 'search') return SearchScreen(drive: d, embedded: true);
     if (_sel == 'transfers') return TransfersScreen(drive: d);
     if (_sel == 'settings') return SettingsScreen(drive: d);
     return ChannelScreen(key: ValueKey(_sel), drive: d, categoryKey: _selKey, chatId: _selChat, embedded: true);

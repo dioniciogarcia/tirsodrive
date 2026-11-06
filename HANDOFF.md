@@ -49,8 +49,7 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
   splitting files over 2 GB (keep OFF for now).
 
 ## Still to build (suggested order)
-1. Global search across all channels (local index, works offline) + filters (category, type/extension, console, size, upload date, original date — stored in the caption as `mtime=`).
-2. Long-press menu additions: Copy to…, Move to…, Rename (app-side display name), multi-select, bulk actions.
+(DONE in 0.3.0: global search + filters (search_screen.dart); Copy/Move via forwardMessages send_copy (move deletes the original after the copy is confirmed); Rename = `name=<urlencoded>` in the caption; multi-select + bulk actions (file_actions.dart).)
 3. Sharing: to Telegram contacts (send as a copy, no "forwarded from"), the Android share sheet / Windows share (WhatsApp, Instagram, Drive…), and "Send to cloud" (Drive/OneDrive desktop folders; a direct Google Drive API upload later).
 4. Sync (two-way folder ↔ channel, conflict prompts, no silent deletes) on Windows AND Android; background uploads on Android (foreground service) and a remembered queue.
 5. Windows virtual drive (T:) — start with WebDAV + "Map network drive", maybe WinFsp later.

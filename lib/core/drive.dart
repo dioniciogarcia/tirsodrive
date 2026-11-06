@@ -15,7 +15,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.2.0';
+const String appVersion = '0.3.0';
 
 class DriveChannel {
   final int chatId;
@@ -38,6 +38,7 @@ class DriveFile {
   final String mime;
   final int fileId;
   final int? originalMs;
+  final String caption; // TirsoDrive's own caption (mtime=, name=, ...)
   DriveFile({
     required this.chatId,
     required this.messageId,
@@ -47,6 +48,7 @@ class DriveFile {
     required this.mime,
     required this.fileId,
     this.originalMs,
+    this.caption = '',
   });
   String get ext => extensionOf(name).toUpperCase();
 }
@@ -245,6 +247,9 @@ class Drive extends ChangeNotifier {
       case 'updateNewMessage':
         final m = u['message'] as Map<String, dynamic>;
         if (m['sending_state'] == null) _addMessage(m);
+        break;
+      case 'updateMessageContent':
+        _refreshMessage((u['chat_id'] as num).toInt(), (u['message_id'] as num).toInt());
         break;
       case 'updateDeleteMessages':
         if (u['is_permanent'] == true) {
@@ -576,6 +581,12 @@ class Drive extends ChangeNotifier {
     if (name.isEmpty) name = 'file_$id';
     final caption = (c['caption']?['text'] ?? '').toString();
     final mt = RegExp(r'mtime=(\d+)').firstMatch(caption);
+    final rn = RegExp(r'(?:^|\s)name=(\S+)').firstMatch(caption);
+    if (rn != null) {
+      try {
+        name = Uri.decodeComponent(rn.group(1)!);
+      } catch (_) {}
+    }
     final size = (file['size'] as num?)?.toInt() ?? 0;
     return DriveFile(
       chatId: (m['chat_id'] as num).toInt(),
@@ -586,6 +597,7 @@ class Drive extends ChangeNotifier {
       mime: mime.isEmpty ? mimeFor(name) : mime,
       fileId: (file['id'] as num).toInt(),
       originalMs: mt == null ? null : int.tryParse(mt.group(1)!),
+      caption: caption,
     );
   }
 
@@ -636,6 +648,158 @@ class Drive extends ChangeNotifier {
     loadingChats.remove(chatId);
     notifyListeners();
   }
+
+  Future<void> _refreshMessage(int chatId, int messageId) async {
+    final list = filesByChat[chatId];
+    if (list == null) return;
+    final i = list.indexWhere((x) => x.messageId == messageId);
+    if (i < 0) return;
+    try {
+      final m = await td.call({'@type': 'getMessage', 'chat_id': chatId, 'message_id': messageId});
+      final f = _fileFromMessage(m);
+      if (f != null) {
+        list[i] = f;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------- copy / move / rename / search
+
+  final Map<String, Completer<bool>> _copyWaiters = {};
+
+  /// Copies files to another channel instantly (Telegram re-uses the stored file, nothing is re-uploaded).
+  /// With [move], each original is deleted only after its copy is confirmed.
+  /// Destination: a category [toKey] (channel created if needed) or an existing [toChatId].
+  Future<void> copyFiles(List<DriveFile> files, {String? toKey, int? toChatId, bool move = false}) async {
+    if (files.isEmpty) return;
+    int dest;
+    try {
+      dest = toChatId ?? await ensureChannel(toKey!);
+    } on TdError catch (e) {
+      _say(t('err_generic', {'e': e.message}));
+      return;
+    }
+    var ok = 0;
+    final bySource = <int, List<DriveFile>>{};
+    for (final f in files) {
+      if (f.chatId == dest) continue;
+      bySource.putIfAbsent(f.chatId, () => []).add(f);
+    }
+    for (final entry in bySource.entries) {
+      for (var i = 0; i < entry.value.length; i += 50) {
+        final chunk = entry.value.sublist(i, (i + 50).clamp(0, entry.value.length));
+        try {
+          final res = await td.call({
+            '@type': 'forwardMessages',
+            'chat_id': dest,
+            'from_chat_id': entry.key,
+            'message_ids': chunk.map((f) => f.messageId).toList(),
+            'send_copy': true, // a clean copy: no "Forwarded from"
+            'remove_caption': false, // keeps original date and renamed name
+          });
+          final sent = (res['messages'] as List?) ?? [];
+          final waits = <Future<bool>>[];
+          final pairs = <MapEntry<DriveFile, Future<bool>>>[];
+          for (var k = 0; k < sent.length && k < chunk.length; k++) {
+            final m = sent[k] as Map<String, dynamic>?;
+            if (m == null) continue;
+            if (m['sending_state'] == null) {
+              pairs.add(MapEntry(chunk[k], Future.value(true)));
+              continue;
+            }
+            final c = Completer<bool>();
+            _copyWaiters['$dest:${m['id']}'] = c;
+            final fut = c.future.timeout(const Duration(minutes: 3), onTimeout: () => false);
+            waits.add(fut);
+            pairs.add(MapEntry(chunk[k], fut));
+          }
+          for (final p in pairs) {
+            if (await p.value) {
+              ok++;
+              if (move) {
+                try {
+                  await td.call({'@type': 'deleteMessages', 'chat_id': p.key.chatId, 'message_ids': [p.key.messageId], 'revoke': true});
+                  filesByChat[p.key.chatId]?.removeWhere((x) => x.messageId == p.key.messageId);
+                } catch (_) {}
+              }
+            }
+          }
+        } on TdError catch (e) {
+          final wait = e.retryAfter;
+          if (wait != null && wait < 300) {
+            await Future.delayed(Duration(seconds: wait + 1));
+            i -= 50; // try this chunk again
+            continue;
+          }
+          _say(t('err_generic', {'e': e.message}));
+        }
+      }
+    }
+    notifyListeners();
+    _say(t(move ? 'moved_n' : 'copied_n', {'n': ok, 'c': channelName(dest)}));
+  }
+
+  /// Renames a file for TirsoDrive (stored in its caption, so every device sees it and downloads use it).
+  Future<void> renameFile(DriveFile f, String newName) async {
+    final clean = newName.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    if (clean.isEmpty || clean == f.name) return;
+    final kept = f.caption.split(RegExp(r'\s+')).where((w) => w.isNotEmpty && !w.startsWith('name=')).toList();
+    if (!kept.any((w) => w.startsWith('tirsodrive'))) kept.insert(0, 'tirsodrive v1');
+    final caption = '${kept.join(' ')} name=${Uri.encodeComponent(clean)}';
+    try {
+      await td.call({
+        '@type': 'editMessageCaption',
+        'chat_id': f.chatId,
+        'message_id': f.messageId,
+        'caption': {'@type': 'formattedText', 'text': caption, 'entities': <dynamic>[]},
+      });
+      await _refreshMessage(f.chatId, f.messageId);
+      _say(t('renamed'));
+    } on TdError catch (e) {
+      _say(t('err_generic', {'e': e.message}));
+    }
+  }
+
+  Future<void> deleteFiles(List<DriveFile> files) async {
+    final byChat = <int, List<DriveFile>>{};
+    for (final f in files) {
+      byChat.putIfAbsent(f.chatId, () => []).add(f);
+    }
+    var n = 0;
+    for (final e in byChat.entries) {
+      try {
+        await td.call({'@type': 'deleteMessages', 'chat_id': e.key, 'message_ids': e.value.map((f) => f.messageId).toList(), 'revoke': true});
+        final ids = e.value.map((f) => f.messageId).toSet();
+        filesByChat[e.key]?.removeWhere((x) => ids.contains(x.messageId));
+        n += e.value.length;
+      } on TdError catch (err) {
+        _say(t('err_generic', {'e': err.message}));
+      }
+    }
+    notifyListeners();
+    if (n > 0) _say(t('deleted_n', {'n': n}));
+  }
+
+  /// Search index: loads every TirsoDrive channel once (later loads come from Telegram's local cache).
+  bool indexing = false;
+  int indexDone = 0;
+  Future<void> loadAllChannels({bool refresh = false}) async {
+    if (indexing) return;
+    indexing = true;
+    final chs = channels;
+    indexDone = 0;
+    notifyListeners();
+    for (final c in chs) {
+      await loadFiles(c.chatId, refresh: refresh);
+      indexDone++;
+      notifyListeners();
+    }
+    indexing = false;
+    notifyListeners();
+  }
+
+  List<DriveFile> get allFiles => [for (final c in channels) ...?filesByChat[c.chatId]];
 
   Future<void> deleteFile(DriveFile f) async {
     try {
@@ -1034,6 +1198,7 @@ class Drive extends ChangeNotifier {
   }
 
   void _onSent(Map<String, dynamic> message, int oldId) {
+    _copyWaiters.remove('${message['chat_id']}:$oldId')?.complete(true);
     final tr = _uploadFor((message['chat_id'] as num).toInt(), oldId);
     if (tr != null) {
       tr.status = TStatus.done;
@@ -1045,6 +1210,7 @@ class Drive extends ChangeNotifier {
   }
 
   void _onSendFailed(Map<String, dynamic> message, int oldId, String error) {
+    _copyWaiters.remove('${message['chat_id']}:$oldId')?.complete(false);
     final tr = _uploadFor((message['chat_id'] as num).toInt(), oldId);
     if (tr != null) {
       tr.status = TStatus.failed;

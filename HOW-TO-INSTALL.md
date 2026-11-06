@@ -1,16 +1,16 @@
-# TirsoDrive — Android 0.2.0 / Windows 0.1.3
+# TirsoDrive — Android 0.3.0 / Windows 0.1.3
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
 
 ## Step 1 — Install the APK
 
-1. Copy `TirsoDrive-0.2.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
+1. Copy `TirsoDrive-0.3.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
 2. Tap the file. If Android asks, allow **Install unknown apps** for the app you opened it with.
 3. Tap **Install**. If an older TirsoDrive is installed, this updates it and you stay signed in.
 
 For a TV (Google TV Streamer, TCL, Fire TV), use the same APK. You can sideload it with
-"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.2.0.apk`
+"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.3.0.apk`
 
 ## Step 2 — Sign in
 
@@ -67,6 +67,9 @@ On Windows:
 
 ## Changes
 
+- **0.3.0:** Global search across all channels (Library › 🔍 on Android, the search box or "Search" in the sidebar on Windows), with filters for where, type, size, date (upload or original) and sort.
+  New file actions: **Copy to…**, **Move to…** (instant, nothing re-uploads; the original is removed only after the copy is confirmed), **Rename** (the new name shows on every device).
+  **Long-press** a file to select several, then Save / Copy / Move / Delete them together.
 - **0.2.0 (Android):** Background uploads with a progress notification (Pause/Resume). Unfinished uploads are remembered and resume after the app or phone restarts. The first upload asks permission to show notifications: tap Allow.
 - **0.1.3:** Fixed uploads staying at 100% when a file went to a different channel than an earlier upload. The upload counter now counts only the current batch, and the end of each upload shows "Finishing…".
 - **0.1.2:** API ID and hash built in; the setup screen is gone.

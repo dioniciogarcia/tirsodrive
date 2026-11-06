@@ -4,6 +4,7 @@ import '../core/categories.dart';
 import '../core/drive.dart';
 import '../core/strings.dart';
 import 'channel_screen.dart';
+import 'search_screen.dart';
 import 'theme.dart';
 import 'upload_review.dart';
 
@@ -78,6 +79,13 @@ class LibraryScreen extends StatelessWidget {
                   Row(children: [
                     const Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 24)),
                     const Spacer(),
+                    IconButton.outlined(
+                      tooltip: t('search_title'),
+                      style: IconButton.styleFrom(side: const BorderSide(color: C.border), backgroundColor: C.surface, minimumSize: const Size(44, 44)),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SearchScreen(drive: drive))),
+                      icon: const Icon(Icons.search),
+                    ),
+                    const SizedBox(width: 10),
                     CircleAvatar(
                       radius: 22,
                       backgroundColor: C.surface2,
