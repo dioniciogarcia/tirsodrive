@@ -49,9 +49,10 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
   splitting files over 2 GB (keep OFF for now).
 
 ## Still to build (suggested order)
+- LATER (the user postponed it): in-app updates. Recommended: GitHub builds the APK too (signing key as a GitHub secret), and a bot posts builds to a private "TD - Updates" channel; the app checks it and offers Update. Not public GitHub releases (the APK contains the API hash).
 (DONE in 0.3.0: global search + filters (search_screen.dart); Copy/Move via forwardMessages send_copy (move deletes the original after the copy is confirmed); Rename = `name=<urlencoded>` in the caption; multi-select + bulk actions (file_actions.dart).)
 (DONE in 0.4.0: sharing — send to chats/contacts via forwardMessages send_copy+remove_caption; Android share sheet (MainActivity.shareFiles); Windows copy into Google Drive/OneDrive/Dropbox folders (NativeBridge.cloudFolders). Channel sort with a remembered sortMode. Still possible later: a direct Google Drive API upload.)
-4. Sync (two-way folder ↔ channel, conflict prompts, no silent deletes) on Windows AND Android; background uploads on Android (foreground service) and a remembered queue.
+(DONE in 0.5.0: folder sync — lib/core/sync.dart + sync_screen.dart; Android SAF tree (pickTree/listTree/writeToTree in MainActivity); state in app-support sync_v1.json; caption `sync=<id> path=<rel>`; changed files replace the old message after the upload; local deletions are never propagated. Runs at start + every 15 min while open (no background scheduling while the app is closed yet). Sharing uses ShareProvider (no copy) + automatic cleanup of TDLib's local copies (prefs temp_files).)
 5. Windows virtual drive (T:) — start with WebDAV + "Map network drive", maybe WinFsp later.
 6. Video/image streaming without a full download; in-app image viewer.
 7. The 11 extras above.

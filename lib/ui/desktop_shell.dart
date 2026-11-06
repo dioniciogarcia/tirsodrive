@@ -13,6 +13,7 @@ import 'channel_screen.dart';
 import 'library_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
+import 'sync_screen.dart';
 import 'theme.dart';
 import 'transfers_screen.dart';
 import 'upload_review.dart';
@@ -122,6 +123,7 @@ class _DesktopShellState extends State<DesktopShell> {
           const SizedBox(height: 14),
           const Divider(),
           const SizedBox(height: 8),
+          _navItem('sync', t('sync_title'), C.green, trailing: d.sync.pairs.isEmpty ? null : '${d.sync.pairs.length}'),
           _navItem('transfers', t('nav_transfers'), C.accentSoft, trailing: active > 0 ? '$active' : null),
           _navItem('settings', t('nav_settings'), C.label),
         ],
@@ -242,6 +244,7 @@ class _DesktopShellState extends State<DesktopShell> {
 
   Widget _content() {
     if (_sel == 'search') return SearchScreen(drive: d, embedded: true);
+    if (_sel == 'sync') return SyncScreen(drive: d, embedded: true);
     if (_sel == 'transfers') return TransfersScreen(drive: d);
     if (_sel == 'settings') return SettingsScreen(drive: d);
     return ChannelScreen(key: ValueKey(_sel), drive: d, categoryKey: _selKey, chatId: _selChat, embedded: true);

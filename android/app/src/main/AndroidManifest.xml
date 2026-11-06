@@ -43,6 +43,13 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Shares downloaded files with other apps without a second copy. -->
+        <provider
+            android:name=".ShareProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- Lets other apps open files TirsoDrive has downloaded. -->
         <provider
             android:name="androidx.core.content.FileProvider"

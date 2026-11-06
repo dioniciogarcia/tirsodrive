@@ -32,6 +32,8 @@ import java.io.FileInputStream
 class MainActivity : FlutterActivity() {
     private val channelName = "tirsodrive/native"
     private val pickRequest = 4711
+    private val treeRequest = 4713
+    private var pendingTree: MethodChannel.Result? = null
     private var pendingPick: MethodChannel.Result? = null
     private val main = Handler(Looper.getMainLooper())
 
@@ -60,6 +62,19 @@ class MainActivity : FlutterActivity() {
                         try { startService(Intent(this, TransferService::class.java).setAction(TransferService.ACTION_STOP)) } catch (_: Exception) { }
                     }
                     result.success(true)
+                }
+                "pickTree" -> {
+                    if (pendingTree != null) { result.error("busy", "Picker already open", null) } else {
+                        pendingTree = result
+                        try {
+                            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), treeRequest)
+                        } catch (e: Exception) { pendingTree = null; result.error("no_picker", e.message, null) }
+                    }
+                }
+                "listTree" -> background(result) { listTree(call.argument<String>("uri")!!) }
+                "writeToTree" -> background(result) {
+                    writeToTree(call.argument<String>("tree")!!, call.argument<String>("rel")!!, call.argument<String>("src")!!)
                 }
                 "shareFiles" -> background(result) {
                     shareFiles(call.argument<List<String>>("paths")!!, call.argument<List<String>>("names")!!, call.argument<List<String>>("mimes")!!)
@@ -139,6 +154,18 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == treeRequest) {
+            val r = pendingTree ?: return
+            pendingTree = null
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) { r.success(null); return }
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            } catch (_: Exception) { }
+            val name = DocumentsContract.getTreeDocumentId(uri).substringAfterLast(':').substringAfterLast('/').ifEmpty { "Folder" }
+            r.success(mapOf("uri" to uri.toString(), "name" to name))
+            return
+        }
         if (requestCode != pickRequest) return
         val result = pendingPick ?: return
         pendingPick = null
@@ -227,20 +254,79 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /** Copies files to cache/share with their TirsoDrive names, then opens the Android share menu. */
-    private fun shareFiles(paths: List<String>, names: List<String>, mimes: List<String>) {
-        val dir = File(cacheDir, "share")
-        dir.deleteRecursively()
-        dir.mkdirs()
-        val uris = ArrayList<Uri>()
-        paths.forEachIndexed { i, p ->
-            val safe = names[i].replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            val sub = File(dir, i.toString())
-            sub.mkdirs()
-            val out = File(sub, safe)
-            File(p).copyTo(out, overwrite = true)
-            uris.add(FileProvider.getUriForFile(this, "$packageName.files", out))
+    // ---------- Folder sync (Storage Access Framework tree) ----------
+
+    private fun listTree(treeText: String): List<Map<String, Any?>> {
+        val tree = Uri.parse(treeText)
+        val out = ArrayList<Map<String, Any?>>()
+        fun walk(docId: String, prefix: String, depth: Int) {
+            if (depth > 25) return
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
+            val cols = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+            contentResolver.query(children, cols, null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getString(0)
+                    val name = c.getString(1) ?: continue
+                    if (name.startsWith(".")) continue
+                    val mime = c.getString(2) ?: ""
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        walk(id, "$prefix$name/", depth + 1)
+                    } else {
+                        out.add(mapOf(
+                            "uri" to DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(),
+                            "path" to "$prefix$name",
+                            "size" to (if (c.isNull(3)) -1L else c.getLong(3)),
+                            "modified" to (if (c.isNull(4)) 0L else c.getLong(4))))
+                    }
+                }
+            }
         }
+        walk(DocumentsContract.getTreeDocumentId(tree), "", 0)
+        return out
+    }
+
+    /** Writes a downloaded file into the synced folder at rel ("Sub/Folder/name.ext"), creating subfolders. */
+    private fun writeToTree(treeText: String, rel: String, src: String): Map<String, Any?> {
+        val tree = Uri.parse(treeText)
+        var parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val parts = rel.split('/').filter { it.isNotEmpty() }
+        for (dir in parts.dropLast(1)) {
+            parent = findChild(tree, parent, dir) ?: DocumentsContract.createDocument(contentResolver, parent, DocumentsContract.Document.MIME_TYPE_DIR, dir)
+                ?: throw IllegalStateException("Cannot create folder $dir")
+        }
+        val name = parts.last()
+        val existing = findChild(tree, parent, name)
+        val target = existing ?: DocumentsContract.createDocument(contentResolver, parent, "application/octet-stream", name)
+            ?: throw IllegalStateException("Cannot create $name")
+        contentResolver.openOutputStream(target, "wt").use { out -> FileInputStream(File(src)).use { it.copyTo(out!!, 1024 * 1024) } }
+        var size = File(src).length()
+        var modified = System.currentTimeMillis()
+        contentResolver.query(target, arrayOf(DocumentsContract.Document.COLUMN_SIZE, DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                if (!c.isNull(0)) size = c.getLong(0)
+                if (!c.isNull(1)) modified = c.getLong(1)
+            }
+        }
+        return mapOf("size" to size, "modified" to modified)
+    }
+
+    private fun findChild(tree: Uri, parent: Uri, name: String): Uri? {
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(parent))
+        contentResolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { c ->
+            while (c.moveToNext()) if (c.getString(1) == name) return DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0))
+        }
+        return null
+    }
+
+    /** Opens the Android share menu for downloaded files (no extra copy). */
+    private fun shareFiles(paths: List<String>, names: List<String>, mimes: List<String>) {
+        // No copy: other apps read the downloaded file directly, under its TirsoDrive name.
+        File(cacheDir, "share").deleteRecursively() // leftovers from older versions
+        val uris = ArrayList<Uri>()
+        paths.forEachIndexed { i, p -> uris.add(ShareProvider.uriFor(this, p, names[i])) }
         val distinct = mimes.toSet()
         val mime = when {
             distinct.size == 1 -> distinct.first()

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/drive.dart';
 import '../core/strings.dart';
+import 'sync_screen.dart';
 import 'theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -53,6 +54,19 @@ class SettingsScreen extends StatelessWidget {
                 radio(t('set_limit_free'), _gb2),
                 radio(t('set_limit_premium'), _gb4),
                 const SizedBox(height: 16),
+                SectionLabel(t('sync_title')),
+                const SizedBox(height: 10),
+                Panel(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(Icons.sync, color: C.accentSoft),
+                    title: Text(t('sync_title'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(t('sync_pairs_n', {'n': drive.sync.pairs.length}), style: const TextStyle(color: C.muted, fontSize: 12)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SyncScreen(drive: drive))),
+                  ),
+                ),
+                const SizedBox(height: 24),
                 SectionLabel(t('set_account')),
                 const SizedBox(height: 10),
                 Panel(

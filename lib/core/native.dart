@@ -74,6 +74,8 @@ class NativeBridge {
     }).toList();
   }
 
+  static Future<String?> pickFolderPath() => getDirectoryPath();
+
   /// Windows: pick a whole folder (all subfolders are included).
   static Future<List<PickedFile>> pickFolder() async {
     final dir = await getDirectoryPath();

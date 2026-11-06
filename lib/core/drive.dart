@@ -10,12 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../td/td_client.dart';
 import 'categories.dart';
 import 'native.dart';
+import 'sync.dart';
 import 'strings.dart';
 
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.4.0';
+const String appVersion = '0.5.0';
 
 class DriveChannel {
   final int chatId;
@@ -38,7 +39,17 @@ class DriveFile {
   final String mime;
   final int fileId;
   final int? originalMs;
-  final String caption; // TirsoDrive's own caption (mtime=, name=, ...)
+  final String caption; // TirsoDrive's own caption (mtime=, name=, path=, ...)
+  /// Folder-relative path for synced files ("Pokemon/Emerald.gba"), else just the name.
+  String get relPath {
+    final m = RegExp(r'(?:^|\s)path=(\S+)').firstMatch(caption);
+    if (m != null) {
+      try {
+        return Uri.decodeComponent(m.group(1)!);
+      } catch (_) {}
+    }
+    return name;
+  }
   DriveFile({
     required this.chatId,
     required this.messageId,
@@ -79,6 +90,9 @@ class Transfer {
   // download
   final DriveFile? file;
   final String? action; // 'open' or 'save'
+  // sync: extra caption words (e.g. "path=..."), and a hook called with the uploaded file
+  String captionExtra = '';
+  void Function(DriveFile? sent)? onSent;
 
   TStatus status = TStatus.queued;
   int bytes = 0;
@@ -132,6 +146,7 @@ enum AuthStep { starting, needApi, params, phone, qr, code, password, email, ema
 
 class Drive extends ChangeNotifier {
   final TdClient td = TdClient();
+  late final SyncManager sync = SyncManager(this);
   late SharedPreferences _prefs;
 
   // settings
@@ -482,6 +497,9 @@ class Drive extends ChangeNotifier {
     } catch (_) {}
     await loadChannels();
     await _restoreQueue();
+    unawaited(_cleanTemp()); // remove files left from sharing/opening last time
+    await sync.load();
+    sync.start();
   }
 
   Future<void> loadChannels() async {
@@ -817,7 +835,7 @@ class Drive extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteFiles(List<DriveFile> files) async {
+  Future<void> deleteFiles(List<DriveFile> files, {bool quiet = false}) async {
     final byChat = <int, List<DriveFile>>{};
     for (final f in files) {
       byChat.putIfAbsent(f.chatId, () => []).add(f);
@@ -834,7 +852,7 @@ class Drive extends ChangeNotifier {
       }
     }
     notifyListeners();
-    if (n > 0) _say(t('deleted_n', {'n': n}));
+    if (n > 0 && !quiet) _say(t('deleted_n', {'n': n}));
   }
 
   /// Search index: loads every TirsoDrive channel once (later loads come from Telegram's local cache).
@@ -858,6 +876,29 @@ class Drive extends ChangeNotifier {
   List<DriveFile> get allFiles => [for (final c in channels) ...?filesByChat[c.chatId]];
 
   // ---------------------------------------------------------------- sharing
+
+  /// Removes TirsoDrive's downloaded copy of these files from this device (the files stay in Telegram).
+  Future<void> dropLocal(List<int> fileIds) async {
+    for (final id in fileIds) {
+      if (transfers.any((x) => !x.finished && (x.fileId == id || x.file?.fileId == id))) continue; // still in use
+      try {
+        await td.call({'@type': 'deleteFile', 'file_id': id});
+      } catch (_) {}
+    }
+  }
+
+  void _markTemp(List<int> ids) {
+    final cur = (_prefs.getStringList('temp_files') ?? <String>[]).toSet()..addAll(ids.map((e) => '$e'));
+    _prefs.setStringList('temp_files', cur.toList());
+  }
+
+  Future<void> _cleanTemp({List<int>? only}) async {
+    final cur = (_prefs.getStringList('temp_files') ?? <String>[]).toSet();
+    final go = only == null ? cur.map(int.parse).toList() : only.where((i) => cur.contains('$i')).toList();
+    await dropLocal(go);
+    cur.removeAll(go.map((e) => '$e'));
+    await _prefs.setStringList('temp_files', cur.toList());
+  }
 
   /// Downloads a file (through the normal queue, with progress) and returns where it is on this device.
   Future<String?> fetch(DriveFile f) {
@@ -950,6 +991,10 @@ class Drive extends ChangeNotifier {
       mimes.add(f.mime);
     }
     if (paths.isEmpty) return;
+    final ids = files.map((f) => f.fileId).toList();
+    _markTemp(ids);
+    // The other app reads the file directly (no copy). Give it time, then remove it from the phone.
+    Timer(const Duration(minutes: 10), () => _cleanTemp(only: ids));
     try {
       await NativeBridge.shareFiles(paths, names, mimes);
     } catch (e) {
@@ -966,6 +1011,7 @@ class Drive extends ChangeNotifier {
       try {
         await NativeBridge.copyInto(p, f.name, '$folder${Platform.pathSeparator}TirsoDrive');
         n++;
+        unawaited(dropLocal([f.fileId]));
       } catch (e) {
         _say(t('err_generic', {'e': e}));
       }
@@ -994,7 +1040,7 @@ class Drive extends ChangeNotifier {
   Future<List<PickedFile>> pick() => NativeBridge.pickFiles();
   Future<List<PickedFile>> pickFolder() => NativeBridge.pickFolder();
 
-  void enqueueUploads(List<Transfer> items) {
+  void enqueueUploads(List<Transfer> items, {bool quiet = false}) {
     if (!transfers.any((x) => x.upload && !x.finished)) {
       _batchTotal = 0;
       _batchDone = 0;
@@ -1005,7 +1051,7 @@ class Drive extends ChangeNotifier {
       _askedNotifications = true;
       NativeBridge.askNotifications();
     }
-    _say(t('queued_msg', {'n': items.length}));
+    if (!quiet) _say(t('queued_msg', {'n': items.length}));
     notifyListeners();
     _pump();
   }
@@ -1148,6 +1194,7 @@ class Drive extends ChangeNotifier {
               'chat': x.destChatId,
               'tmpChat': x.chatId,
               'tmpMsg': x.tempMessageId,
+              'extra': x.captionExtra,
             })
         .toList();
     final json = jsonEncode(list);
@@ -1182,7 +1229,7 @@ class Drive extends ChangeNotifier {
           }
         } catch (_) {}
       }
-      items.add(Transfer.upload(
+      final restored = Transfer.upload(
         name: (m['name'] ?? 'file') as String,
         size: (m['size'] as num?)?.toInt() ?? 0,
         uri: m['uri'] as String?,
@@ -1190,7 +1237,9 @@ class Drive extends ChangeNotifier {
         modifiedMs: (m['mtime'] as num?)?.toInt(),
         destKey: m['key'] as String?,
         destChatId: (m['chat'] as num?)?.toInt(),
-      ));
+      );
+      restored.captionExtra = (m['extra'] ?? '') as String;
+      items.add(restored);
     }
     if (items.isEmpty) return;
     _batchTotal = items.length;
@@ -1231,7 +1280,7 @@ class Drive extends ChangeNotifier {
 
       // 3. Send it as a document so Telegram keeps the original file untouched
       final mtimeSec = (tr.modifiedMs ?? 0) ~/ 1000;
-      final caption = 'tirsodrive v1${mtimeSec > 0 ? ' mtime=$mtimeSec' : ''} src=${Platform.isAndroid ? 'android' : 'pc'}';
+      final caption = 'tirsodrive v1${mtimeSec > 0 ? ' mtime=$mtimeSec' : ''} src=${Platform.isAndroid ? 'android' : 'pc'}${tr.captionExtra.isEmpty ? '' : ' ${tr.captionExtra}'}';
       tr.status = TStatus.active;
       tr._lastTime = DateTime.now();
       notifyListeners();
@@ -1326,8 +1375,10 @@ class Drive extends ChangeNotifier {
         if (tr.action == 'save') {
           final where = await NativeBridge.saveToDownloads(path, f.name, f.mime);
           _say(t('saved_to', {'p': where}));
+          unawaited(dropLocal([f.fileId])); // the copy in Downloads is enough
         } else {
           await NativeBridge.openFile(path, f.mime);
+          _markTemp([f.fileId]); // the viewer may still be reading it; cleaned the next time the app opens
         }
       } catch (e) {
         _say(tr.action == 'save' ? t('err_generic', {'e': e}) : t('open_failed'));
@@ -1378,6 +1429,9 @@ class Drive extends ChangeNotifier {
       tr.status = TStatus.done;
       tr.bytes = tr.size;
       if (!(tr._done?.isCompleted ?? true)) tr._done!.complete();
+      try {
+        tr.onSent?.call(_fileFromMessage(message));
+      } catch (_) {}
     }
     _addMessage(message);
     notifyListeners();
