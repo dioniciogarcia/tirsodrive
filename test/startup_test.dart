@@ -26,7 +26,7 @@ Future<void> _run(WidgetTester tester, Size size, String theme) async {
   final phone = size.width < 1000;
   final tabs = phone
       ? ['Favorites', 'Collections', 'Duplicates', 'Trash', 'Transfers', 'Settings', 'Library']
-      : ['Search', 'Favorites', 'Collections', 'Duplicates', 'Trash', 'Folder sync', 'Transfers', 'Settings', 'Videos'];
+      : ['Search', 'Favorites', 'Collections', 'Duplicates', 'Trash', 'Connected programs', 'Folder sync', 'Transfers', 'Settings', 'Videos'];
   for (final name in tabs) {
     final f = find.text(name);
     if (f.evaluate().isEmpty) continue;

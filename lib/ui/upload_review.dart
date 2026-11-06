@@ -75,10 +75,13 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     return items;
   }
 
+  bool _encrypt = false;
+
   void _start() {
     final list = entries.map((e) {
       final d = e.dest!;
-      return d.startsWith('chat:') ? _transfer(e.file, null, int.parse(d.substring(5))) : _transfer(e.file, d, null);
+      final tr = d.startsWith('chat:') ? _transfer(e.file, null, int.parse(d.substring(5))) : _transfer(e.file, d, null);
+      return tr..encrypt = _encrypt;
     }).toList();
     Navigator.pop(context);
     widget.drive.enqueueUploads(list);
@@ -135,6 +138,20 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                       ),
                     ),
                   ]),
+                ),
+              SizedBox(height: 8),
+              if (widget.drive.vaultKey != null)
+                SwitchListTile(
+                  value: _encrypt,
+                  onChanged: (v) => setState(() => _encrypt = v),
+                  secondary: Icon(Icons.lock_outline, color: _encrypt ? C.accent : C.muted),
+                  title: Text(t('enc_toggle'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  subtitle: Text(t('enc_toggle_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
+                )
+              else
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(t('enc_hint'), style: TextStyle(color: C.label, fontSize: 12)),
                 ),
               if (widget.tooLarge.isNotEmpty) ...[
                 SizedBox(height: 12),

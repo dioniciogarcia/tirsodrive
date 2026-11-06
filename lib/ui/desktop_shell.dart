@@ -12,6 +12,7 @@ import '../core/strings.dart';
 import 'channel_screen.dart';
 import 'library_screen.dart';
 import 'extras_screens.dart';
+import 'programs_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'sync_screen.dart';
@@ -128,6 +129,7 @@ class _DesktopShellState extends State<DesktopShell> {
           _navItem('collections', t('collections'), C.accentSoft),
           _navItem('duplicates', t('duplicates'), C.label),
           _navItem('trash', t('trash'), C.red),
+          _navItem('programs', t('prog_title'), C.accentSoft),
           _navItem('sync', t('sync_title'), C.green, trailing: d.sync.pairs.isEmpty ? null : '${d.sync.pairs.length}'),
           _navItem('transfers', t('nav_transfers'), C.accentSoft, trailing: active > 0 ? '$active' : null),
           _navItem('settings', t('nav_settings'), C.label),
@@ -254,6 +256,7 @@ class _DesktopShellState extends State<DesktopShell> {
     if (_sel == 'collections') return CollectionsScreen(drive: d, embedded: true);
     if (_sel == 'duplicates') return DuplicatesScreen(drive: d, embedded: true);
     if (_sel == 'trash') return TrashScreen(drive: d, embedded: true);
+    if (_sel == 'programs') return ProgramsScreen(drive: d, embedded: true);
     if (_sel == 'transfers') return TransfersScreen(drive: d);
     if (_sel == 'settings') return SettingsScreen(drive: d);
     return ChannelScreen(key: ValueKey(_sel), drive: d, categoryKey: _selKey, chatId: _selChat, embedded: true);

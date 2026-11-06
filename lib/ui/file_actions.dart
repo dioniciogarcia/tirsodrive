@@ -33,7 +33,7 @@ Future<void> showFileMenu(BuildContext context, Drive d, DriveFile f, {VoidCallb
             subtitle: Text('${formatBytes(f.size)} · ${d.channelName(f.chatId)}', style: TextStyle(color: C.muted)),
           ),
           Divider(height: 1),
-          if (isPlayable(f)) item(ctx, Icons.play_circle_outline, t('menu_play'), () => playMedia(context, d, f), color: C.accentSoft),
+          if (isPlayable(f) && !f.encrypted) item(ctx, Icons.play_circle_outline, t('menu_play'), () => playMedia(context, d, f), color: C.accentSoft),
           if (isImage(f)) item(ctx, Icons.image_outlined, t('menu_view'), () => viewImage(context, d, f), color: C.accentSoft),
           item(ctx, Icons.open_in_new, t(isPlayable(f) || isImage(f) ? 'menu_open_other' : 'menu_open'), () => d.download(f, 'open')),
           item(ctx, Icons.download_outlined, t('menu_save'), () => d.download(f, 'save')),
@@ -260,6 +260,10 @@ class FileRow extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Flexible(child: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                  if (file.encrypted) ...[
+                    SizedBox(width: 6),
+                    Icon(Icons.lock, size: 14, color: C.accentSoft),
+                  ],
                   if (isTv) ...[
                     SizedBox(width: 6),
                     Container(
@@ -387,6 +391,7 @@ Future<void> showShareSheet(BuildContext context, Drive d, List<DriveFile> files
           subtitle: Text(formatBytes(files.fold<int>(0, (a, f) => a + f.size)), style: TextStyle(color: C.muted)),
         ),
         Divider(height: 1),
+        if (!files.any((f) => f.encrypted))
         ListTile(
           leading: Icon(Icons.send_outlined, color: C.accentSoft),
           title: Text(t('share_telegram')),

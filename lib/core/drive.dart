@@ -12,14 +12,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../td/td_client.dart';
 import 'categories.dart';
 import 'native.dart';
+import 'programs.dart';
 import 'stream_server.dart';
 import 'sync.dart';
+import 'vault.dart';
+import 'webdav.dart';
 import 'strings.dart';
 
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.7.0';
+const String appVersion = '0.8.0';
 
 class DriveChannel {
   final int chatId;
@@ -112,6 +115,8 @@ class Transfer {
   // sync: extra caption words (e.g. "path=..."), and a hook called with the uploaded file
   String captionExtra = '';
   bool verified = false;
+  bool encrypt = false; // encrypt before uploading (Settings › Encryption)
+  int? remoteSize; // size Telegram should report (encrypted files are slightly bigger)
   void Function(DriveFile? sent)? onSent;
 
   TStatus status = TStatus.queued;
@@ -168,6 +173,9 @@ class Drive extends ChangeNotifier {
   final TdClient td = TdClient();
   late final SyncManager sync = SyncManager(this);
   late final StreamServer streamer = StreamServer(this);
+  late final WebDavDrive webdav = WebDavDrive(this);
+  late final Programs programs = Programs(this);
+  bool driveLetter = false; // Windows: show TirsoDrive as a drive letter
   late SharedPreferences _prefs;
 
   // settings
@@ -185,6 +193,7 @@ class Drive extends ChangeNotifier {
   String lockHash = '';
   bool lockBio = false;
   bool isTv = false;
+  List<int>? vaultKey; // encryption key on this device (from your password)
   final ValueNotifier<int> themeTick = ValueNotifier<int>(0);
   int apiId = builtInApiId;
   String apiHash = builtInApiHash;
@@ -276,6 +285,8 @@ class Drive extends ChangeNotifier {
     themeMode = p.getString('theme') ?? 'dark';
     lockHash = p.getString('lockHash') ?? '';
     lockBio = p.getBool('lockBio') ?? false;
+    final vk = p.getString('vaultKey');
+    vaultKey = vk == null ? null : base64Decode(vk);
     isTv = await NativeBridge.isTv();
     _applyTheme();
     PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
@@ -338,11 +349,35 @@ class Drive extends ChangeNotifier {
   }
 
   bool get lockEnabled => lockHash.isNotEmpty;
+
+  Future<void> setVaultPassword(String? password) async {
+    if (password == null) {
+      vaultKey = null;
+      await _prefs.remove('vaultKey');
+    } else {
+      vaultKey = await deriveVaultKey(password, myId);
+      await _prefs.setString('vaultKey', base64Encode(vaultKey!));
+    }
+    notifyListeners();
+  }
   void setLock(String? pin, {bool bio = false}) {
     lockHash = pin == null ? '' : hashPin(pin);
     lockBio = pin != null && bio;
     _prefs.setString('lockHash', lockHash);
     _prefs.setBool('lockBio', lockBio);
+    notifyListeners();
+  }
+
+  void savePrograms() => _prefs.setString('programs', programs.json);
+
+  Future<void> setDriveLetter(bool on) async {
+    driveLetter = on;
+    await _prefs.setBool('driveLetter', on);
+    if (on) {
+      await webdav.start();
+    } else {
+      await webdav.stop();
+    }
     notifyListeners();
   }
 
@@ -614,9 +649,16 @@ class Drive extends ChangeNotifier {
     await loadChannels();
     await _restoreQueue();
     unawaited(_cleanTemp()); // remove files left from sharing/opening last time
+    try {
+      final dec = Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}dec');
+      if (dec.existsSync()) dec.deleteSync(recursive: true); // decrypted copies from last time
+    } catch (_) {}
     await sync.load();
     sync.start();
     unawaited(purgeTrash());
+    driveLetter = _prefs.getBool('driveLetter') ?? false;
+    programs.load(_prefs.getString('programs'));
+    if (driveLetter) unawaited(webdav.start());
   }
 
   Future<void> loadChannels() async {
@@ -1434,6 +1476,7 @@ class Drive extends ChangeNotifier {
               'tmpChat': x.chatId,
               'tmpMsg': x.tempMessageId,
               'extra': x.captionExtra,
+              'enc': x.encrypt,
             })
         .toList();
     final json = jsonEncode(list);
@@ -1478,6 +1521,7 @@ class Drive extends ChangeNotifier {
         destChatId: (m['chat'] as num?)?.toInt(),
       );
       restored.captionExtra = (m['extra'] ?? '') as String;
+      restored.encrypt = m['enc'] == true;
       items.add(restored);
     }
     if (items.isEmpty) return;
@@ -1516,10 +1560,23 @@ class Drive extends ChangeNotifier {
         path = tr.sourcePath!;
       }
       if (tr.status == TStatus.cancelled) throw _Cancelled();
+      String extra = tr.captionExtra;
+      String? encPath;
+      if (tr.encrypt) {
+        final key = vaultKey;
+        if (key == null) throw Exception(t('vault_need'));
+        final dir = Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}enc')..createSync(recursive: true);
+        encPath = '${dir.path}${Platform.pathSeparator}${DateTime.now().microsecondsSinceEpoch}.tde';
+        await encryptFile(path, encPath, key);
+        path = encPath;
+        tr.remoteSize = encryptedSize(tr.size);
+        extra = '$extra enc=1 name=${Uri.encodeComponent(tr.name)}'.trim();
+      }
+      if (tr.status == TStatus.cancelled) throw _Cancelled();
 
       // 3. Send it as a document so Telegram keeps the original file untouched
       final mtimeSec = (tr.modifiedMs ?? 0) ~/ 1000;
-      final caption = 'tirsodrive v1${mtimeSec > 0 ? ' mtime=$mtimeSec' : ''} src=${Platform.isAndroid ? 'android' : 'pc'}${tr.captionExtra.isEmpty ? '' : ' ${tr.captionExtra}'}';
+      final caption = 'tirsodrive v1${mtimeSec > 0 ? ' mtime=$mtimeSec' : ''} src=${Platform.isAndroid ? 'android' : 'pc'}${extra.isEmpty ? '' : ' $extra'}';
       tr.status = TStatus.active;
       tr._lastTime = DateTime.now();
       notifyListeners();
@@ -1544,6 +1601,11 @@ class Drive extends ChangeNotifier {
         _byFileId[tr.fileId!] = tr;
       }
       await tr._done!.future;
+      if (encPath != null) {
+        try {
+          File(encPath).deleteSync();
+        } catch (_) {}
+      }
     } on _Cancelled {
       tr.status = TStatus.cancelled;
     } on TdError catch (e) {
@@ -1594,6 +1656,19 @@ class Drive extends ChangeNotifier {
         final file = await td.call({'@type': 'getFile', 'file_id': f.fileId});
         path = file['local']?['path'] as String?;
         if (path == null || path.isEmpty) throw Exception('Download did not finish');
+        if (f.encrypted) {
+          final key = vaultKey;
+          if (key == null) throw Exception(t('vault_need'));
+          final dir = Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}dec${Platform.pathSeparator}${f.fileId}')..createSync(recursive: true);
+          final out = '${dir.path}${Platform.pathSeparator}${f.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}';
+          try {
+            await decryptFile(path, out, key);
+          } on VaultError {
+            throw Exception(t('vault_wrong'));
+          }
+          unawaited(dropLocal([f.fileId])); // keep only the readable copy, and only for now
+          path = out;
+        }
         tr.status = TStatus.done;
         tr.bytes = tr.size;
       }
@@ -1666,7 +1741,7 @@ class Drive extends ChangeNotifier {
     final tr = _uploadFor((message['chat_id'] as num).toInt(), oldId);
     if (tr != null) {
       final sentFile = _fileFromMessage(message);
-      if (sentFile != null && tr.size > 0 && sentFile.size != tr.size) {
+      if (sentFile != null && tr.size > 0 && sentFile.size != (tr.remoteSize ?? tr.size)) {
         tr.status = TStatus.failed; // integrity check: Telegram has a different size than the original
         tr.error = t('err_integrity', {'a': formatBytes(sentFile.size), 'b': formatBytes(tr.size)});
       } else {

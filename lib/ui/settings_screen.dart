@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../core/drive.dart';
 import '../core/strings.dart';
+import '../core/webdav.dart';
 import 'lock_screen.dart';
+import 'programs_screen.dart';
 import 'sync_screen.dart';
 import 'theme.dart';
 
@@ -26,6 +30,42 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     return r == true;
+  }
+
+  Future<void> _vaultDialog(BuildContext context) async {
+    final a = TextEditingController();
+    final b = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('enc_set'), style: TextStyle(fontFamily: displayFont)),
+        content: SizedBox(
+          width: 400,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t('enc_warning'), style: TextStyle(color: C.amberText, fontSize: 13, height: 1.4)),
+            SizedBox(height: 12),
+            TextField(controller: a, obscureText: true, decoration: InputDecoration(labelText: t('enc_pw'))),
+            SizedBox(height: 10),
+            TextField(controller: b, obscureText: true, decoration: InputDecoration(labelText: t('enc_pw2'))),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: Size(96, 44)),
+            onPressed: () {
+              if (a.text.length < 8 || a.text != b.text) {
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(t('enc_pw_bad'))));
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: Text(t('verify')),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await drive.setVaultPassword(a.text);
   }
 
   @override
@@ -118,6 +158,54 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ]),
                 SizedBox(height: 24),
+                SectionLabel(t('prog_title')),
+                SizedBox(height: 10),
+                Material(
+                  color: C.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: Icon(Icons.smart_toy_outlined, color: C.accentSoft),
+                    title: Text(t('prog_title'), style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(drive.programs.list.isEmpty ? t('prog_none') : drive.programs.list.map((p) => p.name).join(', '), style: TextStyle(color: C.muted, fontSize: 12)),
+                    trailing: Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProgramsScreen(drive: drive))),
+                  ),
+                ),
+                SizedBox(height: 24),
+                SectionLabel(t('enc_title')),
+                SizedBox(height: 6),
+                Text(t('enc_intro'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: drive.vaultKey != null,
+                  onChanged: (on) => on ? _vaultDialog(context) : drive.setVaultPassword(null),
+                  title: Text(t('enc_switch'), style: TextStyle(fontSize: 14)),
+                  subtitle: Text(drive.vaultKey != null ? t('enc_on') : t('enc_off'), style: TextStyle(color: C.muted, fontSize: 12)),
+                ),
+                SizedBox(height: 24),
+                if (Platform.isWindows) ...[
+                  SectionLabel(t('drive_title')),
+                  SizedBox(height: 6),
+                  Text(t('drive_intro'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: drive.driveLetter,
+                    onChanged: drive.setDriveLetter,
+                    title: Text(t('drive_switch'), style: TextStyle(fontSize: 14)),
+                    subtitle: Text(drive.webdav.status.isEmpty ? t('drive_off') : drive.webdav.status, style: TextStyle(color: C.muted, fontSize: 12)),
+                  ),
+                  if (drive.driveLetter)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: WebDavDrive.allowBigFiles,
+                        icon: Icon(Icons.admin_panel_settings_outlined, size: 18),
+                        label: Text(t('drive_bigfiles')),
+                      ),
+                    ),
+                  SizedBox(height: 24),
+                ],
                 SectionLabel(t('lock_title_set')),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

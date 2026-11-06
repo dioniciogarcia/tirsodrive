@@ -1,16 +1,16 @@
-# TirsoDrive — Android 0.7.0 / Windows 0.1.3
+# TirsoDrive — Android 0.8.0 / Windows 0.1.3
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
 
 ## Step 1 — Install the APK
 
-1. Copy `TirsoDrive-0.7.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
+1. Copy `TirsoDrive-0.8.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
 2. Tap the file. If Android asks, allow **Install unknown apps** for the app you opened it with.
 3. Tap **Install**. If an older TirsoDrive is installed, this updates it and you stay signed in.
 
 For a TV (Google TV Streamer, TCL, Fire TV), use the same APK. You can sideload it with
-"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.7.0.apk`
+"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.8.0.apk`
 
 ## Step 2 — Sign in
 
@@ -67,6 +67,12 @@ On Windows:
 
 ## Changes
 
+- **0.8.0:** **Encryption** (Settings › Encryption): set a password, then turn on "Encrypt these files" when uploading with the + button / Back up a folder.
+  Telegram only stores scrambled data; encrypted files show a 🔒 and are decrypted when you open, save or share them. Forget the password = the files can't be opened.
+  **Drive letter T: (Windows, beta)** (Settings › Drive letter): your channels appear as folders in File Explorer; copy in to upload, open to stream, delete = Trash.
+  Windows limits these files to 50 MB unless you press "Allow files over 50 MB" once (asks for admin permission).
+  **Connected programs › Connect Tirso Compiler:** creates Tirso's own bot via @BotFather, the six "TD - <Console> APKs" channels, gives the bot access to only those,
+  and saves tirso-compiler-telegram.json. Tirso Compiler uploads with tools/tirso_upload.py (in TirsoDrive-source.zip / on GitHub).
 - **0.7.0:** **Trash:** Delete now moves files to a "TD - Trash" channel for 30 days (restore anytime; emptied automatically after 30 days).
   **Favorites** and **Collections** (file menu ★ / "Add to collection…"; saved in Telegram so every device sees them).
   **Duplicates** finder (same size and type anywhere; keeps the oldest copy, extras go to the Trash).

@@ -40,14 +40,19 @@ class StreamServer {
   }
 
   Future<void> _handle(HttpRequest req) async {
-    final res = req.response;
     final parts = req.uri.pathSegments;
     final f = parts.length >= 2 && parts[0] == 's' ? _files[parts[1]] : null;
     if (f == null) {
-      res.statusCode = HttpStatus.notFound;
-      await res.close();
+      req.response.statusCode = HttpStatus.notFound;
+      await req.response.close();
       return;
     }
+    await serveFile(req, f, keepServing: () => _files.containsValue(f));
+  }
+
+  /// Answers a GET/HEAD (with byte ranges) for [f] by reading the needed parts from Telegram.
+  Future<void> serveFile(HttpRequest req, DriveFile f, {bool Function()? keepServing}) async {
+    final res = req.response;
     final total = f.size;
     var start = 0;
     var end = total - 1;
@@ -87,7 +92,7 @@ class StreamServer {
     const chunk = 512 * 1024;
     var idle = 0;
     try {
-      while (pos <= end && _files.containsValue(f)) {
+      while (pos <= end && (keepServing?.call() ?? true)) {
         final want = min(chunk, end - pos + 1);
         final pre = await d.td.call({'@type': 'getFileDownloadedPrefixSize', 'file_id': f.fileId, 'offset': pos});
         final ready = (pre['size'] as num?)?.toInt() ?? 0;
