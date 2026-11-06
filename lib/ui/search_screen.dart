@@ -101,7 +101,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _drop<T>(String label, T value, List<(T, String)> options, ValueChanged<T> onChanged) {
     return Container(
       height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: C.surface,
         borderRadius: BorderRadius.circular(10),
@@ -112,7 +112,7 @@ class _SearchScreenState extends State<SearchScreen> {
           value: value,
           dropdownColor: C.surface2,
           isDense: true,
-          style: const TextStyle(color: C.text, fontSize: 13, fontFamily: 'Inter'),
+          style: TextStyle(color: C.text, fontSize: 13, fontFamily: 'Inter'),
           hint: Text(label),
           items: [for (final o in options) DropdownMenuItem<T>(value: o.$1, child: Text(o.$2))],
           onChanged: (v) {
@@ -153,22 +153,22 @@ class _SearchScreenState extends State<SearchScreen> {
         if (!whereOptions.any((o) => o.$1 == _where)) _where = 'all';
 
         final body = ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 40),
           children: [
             TextField(
               controller: _q,
               autofocus: true,
-              style: const TextStyle(fontSize: 16),
+              style: TextStyle(fontSize: 16),
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(Icons.search),
                 hintText: t('search_hint'),
                 suffixIcon: _q.text.isEmpty
                     ? null
-                    : IconButton(tooltip: t('cancel'), onPressed: () => setState(_q.clear), icon: const Icon(Icons.close)),
+                    : IconButton(tooltip: t('cancel'), onPressed: () => setState(_q.clear), icon: Icon(Icons.close)),
               ),
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [
               _drop<String>(t('f_where'), _where, whereOptions, (v) => _where = v),
               _drop<String>(t('f_type'), _ext, [('all', t('f_any_type')), for (final e in extList.take(40)) (e, '.$e  (${exts[e]})')], (v) => _ext = v),
@@ -195,22 +195,22 @@ class _SearchScreenState extends State<SearchScreen> {
                 ('small', t('s_small')),
               ], (v) => _sort = v),
             ]),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Row(children: [
-              Text(t('results_n', {'n': results.length}), style: const TextStyle(color: C.muted, fontSize: 13)),
-              const Spacer(),
+              Text(t('results_n', {'n': results.length}), style: TextStyle(color: C.muted, fontSize: 13)),
+              Spacer(),
               if (d.indexing) ...[
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                const SizedBox(width: 8),
-                Text(t('indexing', {'i': d.indexDone, 'n': d.channels.length}), style: const TextStyle(color: C.muted, fontSize: 12)),
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 8),
+                Text(t('indexing', {'i': d.indexDone, 'n': d.channels.length}), style: TextStyle(color: C.muted, fontSize: 12)),
               ] else
                 TextButton.icon(
                   onPressed: () => d.loadAllChannels(refresh: true),
-                  icon: const Icon(Icons.refresh, size: 16),
+                  icon: Icon(Icons.refresh, size: 16),
                   label: Text(t('refresh_index')),
                 ),
             ]),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             for (final f in results.take(500))
               FileRow(
                 file: f,
@@ -227,8 +227,8 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             if (results.length > 500)
               Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(t('more_results', {'n': results.length - 500}), style: const TextStyle(color: C.label, fontSize: 12)),
+                padding: EdgeInsets.only(top: 12),
+                child: Text(t('more_results', {'n': results.length - 500}), style: TextStyle(color: C.label, fontSize: 12)),
               ),
           ],
         );
@@ -246,7 +246,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   backgroundColor: C.bg,
                   automaticallyImplyLeading: !widget.embedded,
                   titleSpacing: widget.embedded ? 24 : 0,
-                  title: Text(t('search_title'), style: const TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w600, fontSize: 20)),
+                  title: Text(t('search_title'), style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w600, fontSize: 20)),
                 ),
           body: body,
         );

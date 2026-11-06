@@ -15,17 +15,17 @@ Future<void> showNewChannelDialog(BuildContext context, Drive drive) async {
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, set) => AlertDialog(
-        title: Text(t('new_channel_title'), style: const TextStyle(fontFamily: displayFont)),
+        title: Text(t('new_channel_title'), style: TextStyle(fontFamily: displayFont)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           TextField(controller: ctrl, autofocus: true, decoration: InputDecoration(labelText: t('new_channel_hint')), onChanged: (_) => set(() {})),
-          const SizedBox(height: 10),
-          Text(t('new_channel_note', {'n': ctrl.text.trim().isEmpty ? '…' : ctrl.text.trim()}), style: const TextStyle(color: C.muted, fontSize: 13)),
-          if (err != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(err!, style: const TextStyle(color: C.red, fontSize: 13))),
+          SizedBox(height: 10),
+          Text(t('new_channel_note', {'n': ctrl.text.trim().isEmpty ? '…' : ctrl.text.trim()}), style: TextStyle(color: C.muted, fontSize: 13)),
+          if (err != null) Padding(padding: EdgeInsets.only(top: 8), child: Text(err!, style: TextStyle(color: C.red, fontSize: 13))),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
           FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(96, 44)),
+            style: FilledButton.styleFrom(minimumSize: Size(96, 44)),
             onPressed: () async {
               final e = await drive.createCustomChannel(ctrl.text);
               if (e == null) {
@@ -68,58 +68,58 @@ class LibraryScreen extends StatelessWidget {
             foregroundColor: C.onAccent,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             onPressed: () => pickAndUpload(context, drive),
-            child: const Icon(Icons.add, size: 28),
+            child: Icon(Icons.add, size: 28),
           ),
           body: SafeArea(
             child: LayoutBuilder(builder: (context, box) {
               final cols = box.maxWidth > 900 ? 4 : (box.maxWidth > 600 ? 3 : 2);
               return ListView(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
+                padding: EdgeInsets.fromLTRB(18, 18, 18, 110),
                 children: [
                   Row(children: [
-                    const Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 24)),
-                    const Spacer(),
+                    Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 24)),
+                    Spacer(),
                     IconButton.outlined(
                       tooltip: t('search_title'),
-                      style: IconButton.styleFrom(side: const BorderSide(color: C.border), backgroundColor: C.surface, minimumSize: const Size(44, 44)),
+                      style: IconButton.styleFrom(side: BorderSide(color: C.border), backgroundColor: C.surface, minimumSize: Size(44, 44)),
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SearchScreen(drive: drive))),
-                      icon: const Icon(Icons.search),
+                      icon: Icon(Icons.search),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     CircleAvatar(
                       radius: 22,
                       backgroundColor: C.surface2,
                       child: Text(drive.myName.isEmpty ? 'T' : drive.myName.characters.first.toUpperCase(),
-                          style: const TextStyle(color: C.text, fontWeight: FontWeight.w600)),
+                          style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
                     ),
                   ]),
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   Panel(
                     color: online ? C.greenBg : C.surface,
                     borderColor: online ? C.greenBorder : C.border,
                     child: Row(children: [
                       online
-                          ? const Icon(Icons.cloud_done_outlined, color: C.green)
-                          : const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
-                      const SizedBox(width: 12),
+                          ? Icon(Icons.cloud_done_outlined, color: C.green)
+                          : SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                      SizedBox(width: 12),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(online ? t('status_online') : (waiting ? t('status_waiting') : t('status_connecting')),
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          const SizedBox(height: 3),
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          SizedBox(height: 3),
                           Text(t('status_channels', {'n': drive.channels.length}),
-                              style: TextStyle(fontSize: 12, color: online ? const Color(0xFFA9C9B8) : C.muted)),
+                              style: TextStyle(fontSize: 12, color: online ? C.greenSub : C.muted)),
                         ]),
                       ),
                     ]),
                   ),
-                  const SizedBox(height: 22),
+                  SizedBox(height: 22),
                   SectionLabel(t('section_library')),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   GridView.count(
                     crossAxisCount: cols,
                     shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
+                    physics: NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
                     childAspectRatio: 1.75,
@@ -141,11 +141,11 @@ class LibraryScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   Row(children: [
                     SectionLabel(t('section_mine')),
-                    const Spacer(),
-                    TextButton.icon(onPressed: () => _newChannel(context), icon: const Icon(Icons.add, size: 18), label: Text(t('new_channel'))),
+                    Spacer(),
+                    TextButton.icon(onPressed: () => _newChannel(context), icon: Icon(Icons.add, size: 18), label: Text(t('new_channel'))),
                   ]),
                   for (final ch in mine)
                     _Row(
@@ -172,9 +172,9 @@ class RomsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: drive,
       builder: (context, _) => Scaffold(
-        appBar: AppBar(backgroundColor: C.bg, title: Text(t('section_roms'), style: const TextStyle(fontFamily: displayFont))),
+        appBar: AppBar(backgroundColor: C.bg, title: Text(t('section_roms'), style: TextStyle(fontFamily: displayFont))),
         body: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+          padding: EdgeInsets.fromLTRB(18, 8, 18, 24),
           children: [
             for (final c in romCategories)
               _Row(
@@ -202,17 +202,17 @@ class _Tile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: C.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: C.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             ExtBadge(tag, color: color, size: 30),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: C.muted)),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: C.muted)),
             ]),
           ]),
         ),
@@ -234,18 +234,18 @@ class _Row extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+        padding: EdgeInsets.symmetric(vertical: 9, horizontal: 4),
         child: Row(children: [
           ExtBadge(tag, color: dim ? C.label : C.accent, size: 42),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: dim ? C.soft : C.text)),
-              const SizedBox(height: 2),
-              Text(sub, style: const TextStyle(fontSize: 12, color: C.muted)),
+              SizedBox(height: 2),
+              Text(sub, style: TextStyle(fontSize: 12, color: C.muted)),
             ]),
           ),
-          const Icon(Icons.chevron_right, color: C.label),
+          Icon(Icons.chevron_right, color: C.label),
         ]),
       ),
     );

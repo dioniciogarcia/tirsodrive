@@ -1,16 +1,16 @@
-# TirsoDrive — Android 0.5.0 / Windows 0.1.3
+# TirsoDrive — Android 0.6.0 / Windows 0.1.3
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
 
 ## Step 1 — Install the APK
 
-1. Copy `TirsoDrive-0.5.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
+1. Copy `TirsoDrive-0.6.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
 2. Tap the file. If Android asks, allow **Install unknown apps** for the app you opened it with.
 3. Tap **Install**. If an older TirsoDrive is installed, this updates it and you stay signed in.
 
 For a TV (Google TV Streamer, TCL, Fire TV), use the same APK. You can sideload it with
-"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.5.0.apk`
+"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.6.0.apk`
 
 ## Step 2 — Sign in
 
@@ -67,6 +67,9 @@ On Windows:
 
 ## Changes
 
+- **0.6.0:** **Play (stream)** for videos and music: it starts in seconds while the rest downloads, and you can jump anywhere (in-app player on Android; on Windows it opens in VLC if installed, otherwise the browser).
+  **View** photos in the app with pinch-zoom. Nothing stays on the device afterwards.
+  **Theme:** Settings › Theme › Light / Dark / Automatic (follows the phone or PC).
 - **0.5.0:** **Folder sync** (Settings › Folder sync on Android; "Folder sync" in the Windows sidebar): pair a folder with a channel.
   *Back up* uploads new and changed files (subfolders kept); *Two-way* also downloads files that are only in the channel.
   Runs when the app opens, every 15 min while it's open, or with Sync now. Nothing is ever deleted automatically, and files already in the channel aren't uploaded twice.

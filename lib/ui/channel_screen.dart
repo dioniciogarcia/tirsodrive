@@ -81,18 +81,18 @@ class _ChannelScreenState extends State<ChannelScreen> {
             titleSpacing: widget.embedded ? 24 : 0,
             toolbarHeight: widget.embedded ? 76 : null,
             title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_title, style: const TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w600, fontSize: 20)),
+              Text(_title, style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w600, fontSize: 20)),
               Text(
                 channel == null
                     ? t('not_created')
                     : '${t('ready_channel')} · ${channel.title} · ${t('files_count', {'n': all.length})}',
-                style: const TextStyle(fontSize: 12, color: C.muted),
+                style: TextStyle(fontSize: 12, color: C.muted),
               ),
             ]),
             actions: [
               PopupMenuButton<String>(
                 tooltip: t('f_sort'),
-                icon: const Icon(Icons.sort),
+                icon: Icon(Icons.sort),
                 initialValue: d.sortMode,
                 onSelected: d.setSort,
                 itemBuilder: (_) => [
@@ -108,57 +108,57 @@ class _ChannelScreenState extends State<ChannelScreen> {
                       value: k,
                       child: Row(children: [
                         Icon(d.sortMode == k ? Icons.check : null, size: 18, color: C.accent),
-                        const SizedBox(width: 10),
+                        SizedBox(width: 10),
                         Text(label),
                       ]),
                     ),
                 ],
               ),
               if (id != null)
-                IconButton(tooltip: 'Refresh', onPressed: () => d.loadFiles(id, refresh: true), icon: const Icon(Icons.refresh)),
+                IconButton(tooltip: 'Refresh', onPressed: () => d.loadFiles(id, refresh: true), icon: Icon(Icons.refresh)),
             ],
           ),
           floatingActionButton: widget.embedded || selecting ? null : FloatingActionButton.extended(
             backgroundColor: C.accent,
             foregroundColor: C.onAccent,
             onPressed: () => pickAndUpload(context, d, fixedKey: widget.categoryKey, fixedChatId: widget.chatId),
-            icon: const Icon(Icons.upload),
-            label: Text(t('upload'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            icon: Icon(Icons.upload),
+            label: Text(t('upload'), style: TextStyle(fontWeight: FontWeight.w700)),
           ),
           body: RefreshIndicator(
             onRefresh: () async {
               if (id != null) await d.loadFiles(id, refresh: true);
             },
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 110),
               children: [
                 if (all.length > 8)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                    padding: EdgeInsets.only(bottom: 10),
                     child: TextField(
-                      decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: '…'),
+                      decoration: InputDecoration(prefixIcon: Icon(Icons.search), hintText: '…'),
                       onChanged: (v) => setState(() => _filter = v),
                     ),
                   ),
                 for (final tr in pending) _PendingRow(tr: tr),
                 if (loading && all.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 60),
+                    padding: EdgeInsets.only(top: 60),
                     child: Column(children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 14),
-                      Text(t('loading_files'), style: const TextStyle(color: C.muted)),
+                      CircularProgressIndicator(),
+                      SizedBox(height: 14),
+                      Text(t('loading_files'), style: TextStyle(color: C.muted)),
                     ]),
                   )
                 else if (all.isEmpty && pending.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 40),
+                    padding: EdgeInsets.only(top: 40),
                     child: Panel(
-                      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                      padding: EdgeInsets.symmetric(vertical: 40, horizontal: 20),
                       child: Column(children: [
-                        Text(t('empty_title'), style: const TextStyle(fontFamily: displayFont, fontSize: 20)),
-                        const SizedBox(height: 8),
-                        Text(t(widget.embedded ? 'empty_body_pc' : 'empty_body'), style: const TextStyle(color: C.muted)),
+                        Text(t('empty_title'), style: TextStyle(fontFamily: displayFont, fontSize: 20)),
+                        SizedBox(height: 8),
+                        Text(t(widget.embedded ? 'empty_body_pc' : 'empty_body'), style: TextStyle(color: C.muted)),
                       ]),
                     ),
                   ),
@@ -195,17 +195,17 @@ class _PendingRow extends StatelessWidget {
       _ => t('tr_next', {'n': ''}).replaceAll(RegExp(r'\s*\(\)'), ''),
     };
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 2),
       child: Row(children: [
         ExtBadge(extensionOf(tr.name).toUpperCase(), color: C.label),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tr.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.soft)),
-            const SizedBox(height: 5),
+            Text(tr.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.soft)),
+            SizedBox(height: 5),
             if (tr.status == TStatus.active) Bar(tr.fraction, height: 4),
-            const SizedBox(height: 3),
-            Text('${formatBytes(tr.size)} · $label', style: const TextStyle(fontSize: 12, color: C.accentSoft)),
+            SizedBox(height: 3),
+            Text('${formatBytes(tr.size)} · $label', style: TextStyle(fontSize: 12, color: C.accentSoft)),
           ]),
         ),
       ]),

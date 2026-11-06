@@ -14,6 +14,7 @@ import 'ui/transfers_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final drive = Drive();
+  await drive.loadTheme(); // before the first frame, so there is no flash of the wrong theme
   runApp(TirsoDriveApp(drive: drive));
   await drive.init();
 }
@@ -24,24 +25,30 @@ class TirsoDriveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TirsoDrive',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
-      home: ListenableBuilder(
-        listenable: drive,
-        builder: (context, _) {
-          switch (drive.step) {
-            case AuthStep.needApi:
-              return ApiSetupScreen(drive: drive);
-            case AuthStep.ready:
-              return LayoutBuilder(
-                builder: (context, box) => box.maxWidth >= 1000 ? DesktopShell(drive: drive) : MainShell(drive: drive),
-              );
-            default:
-              return LoginScreen(drive: drive);
-          }
-        },
+    return ValueListenableBuilder<int>(
+      valueListenable: drive.themeTick,
+      builder: (context, tick, _) => MaterialApp(
+        key: ValueKey(tick), // rebuild every screen with the new colors
+        title: 'TirsoDrive',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(),
+        home: ListenableBuilder(
+          listenable: drive,
+          builder: (context, _) {
+            switch (drive.step) {
+              case AuthStep.needApi:
+                return ApiSetupScreen(drive: drive);
+              case AuthStep.ready:
+                return LayoutBuilder(
+                  builder: (context, box) => box.maxWidth >= 1000
+                      ? DesktopShell(drive: drive)
+                      : MainShell(drive: drive),
+                );
+              default:
+                return LoginScreen(drive: drive);
+            }
+          },
+        ),
       ),
     );
   }
@@ -77,23 +84,38 @@ class _MainShellState extends State<MainShell> {
     final d = widget.drive;
     final active = d.transfers.where((x) => !x.finished).length;
     return Scaffold(
-      body: IndexedStack(index: _tab, children: [
-        LibraryScreen(drive: d),
-        TransfersScreen(drive: d),
-        SettingsScreen(drive: d),
-      ]),
+      body: IndexedStack(
+        index: _tab,
+        children: [
+          LibraryScreen(drive: d),
+          TransfersScreen(drive: d),
+          SettingsScreen(drive: d),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: C.panel,
         indicatorColor: C.raised,
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.folder_outlined), selectedIcon: const Icon(Icons.folder), label: t('nav_library')),
           NavigationDestination(
-            icon: Badge(isLabelVisible: active > 0, label: Text('$active'), child: const Icon(Icons.swap_vert)),
+            icon: Icon(Icons.folder_outlined),
+            selectedIcon: Icon(Icons.folder),
+            label: t('nav_library'),
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: active > 0,
+              label: Text('$active'),
+              child: Icon(Icons.swap_vert),
+            ),
             label: t('nav_transfers'),
           ),
-          NavigationDestination(icon: const Icon(Icons.settings_outlined), selectedIcon: const Icon(Icons.settings), label: t('nav_settings')),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: t('nav_settings'),
+          ),
         ],
       ),
     );

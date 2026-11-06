@@ -17,26 +17,26 @@ class _AuthFrame extends StatelessWidget {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
+            constraints: BoxConstraints(maxWidth: 460),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(22, 24, 22, 26),
+              padding: EdgeInsets.fromLTRB(22, 24, 22, 26),
               children: [
                 Row(children: [
-                  const TdLogo(),
-                  const SizedBox(width: 10),
-                  const Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 20)),
-                  const Spacer(),
+                  TdLogo(),
+                  SizedBox(width: 10),
+                  Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 20)),
+                  Spacer(),
                   LangSwitch(lang: drive.lang, onChanged: drive.setLang),
                 ]),
-                const SizedBox(height: 26),
+                SizedBox(height: 26),
                 ...children,
-                const SizedBox(height: 26),
+                SizedBox(height: 26),
                 Panel(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(children: [
-                    const Icon(Icons.lock_outline, size: 18, color: C.green),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(t('secure_note'), style: const TextStyle(fontSize: 12, color: C.muted, height: 1.4))),
+                    Icon(Icons.lock_outline, size: 18, color: C.green),
+                    SizedBox(width: 10),
+                    Expanded(child: Text(t('secure_note'), style: TextStyle(fontSize: 12, color: C.muted, height: 1.4))),
                   ]),
                 ),
               ],
@@ -49,16 +49,16 @@ class _AuthFrame extends StatelessWidget {
 }
 
 Widget _title(String s) =>
-    Text(s, style: const TextStyle(fontFamily: displayFont, fontSize: 28, fontWeight: FontWeight.w600, height: 1.15));
+    Text(s, style: TextStyle(fontFamily: displayFont, fontSize: 28, fontWeight: FontWeight.w600, height: 1.15));
 Widget _body(String s) => Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Text(s, style: const TextStyle(fontSize: 14, color: C.muted, height: 1.5)),
+      padding: EdgeInsets.only(top: 8),
+      child: Text(s, style: TextStyle(fontSize: 14, color: C.muted, height: 1.5)),
     );
 Widget _error(String? e) => e == null
-    ? const SizedBox.shrink()
+    ? SizedBox.shrink()
     : Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Text(e, style: const TextStyle(color: C.red, fontSize: 13, height: 1.4)),
+        padding: EdgeInsets.only(top: 12),
+        child: Text(e, style: TextStyle(color: C.red, fontSize: 13, height: 1.4)),
       );
 
 // ------------------------------------------------------------------ API setup
@@ -90,12 +90,12 @@ class _ApiSetupScreenState extends State<ApiSetupScreen> {
     return _AuthFrame(drive: widget.drive, children: [
       _title(t('setup_title')),
       _body(t('setup_body')),
-      const SizedBox(height: 22),
+      SizedBox(height: 22),
       TextField(controller: _id, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t('setup_id'))),
-      const SizedBox(height: 12),
+      SizedBox(height: 12),
       TextField(controller: _hash, autocorrect: false, decoration: InputDecoration(labelText: t('setup_hash'))),
       _error(_err),
-      const SizedBox(height: 18),
+      SizedBox(height: 18),
       FilledButton(onPressed: _save, child: Text(t('setup_save'))),
     ]);
   }
@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _busyButton(String label, VoidCallback onTap) => FilledButton(
         onPressed: d.authBusy ? null : onTap,
         child: d.authBusy
-            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: C.text))
+            ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: C.text))
             : Text(label),
       );
 
@@ -148,14 +148,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: 44,
                 child: Center(
                   child: Text(label,
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _qrTab == qr ? Colors.white : C.muted)),
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: _qrTab == qr ? C.strong : C.muted)),
                 ),
               ),
             ),
           ),
         );
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(4),
       decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
       child: Row(children: [tab(t('tab_phone'), false), tab(t('tab_qr'), true)]),
     );
@@ -165,9 +165,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final out = <Widget>[
       _title(t('login_title')),
       _body(t('login_sub')),
-      const SizedBox(height: 22),
+      SizedBox(height: 22),
       _tabs(),
-      const SizedBox(height: 22),
+      SizedBox(height: 22),
     ];
     if (_qrTab) {
       final link = d.qrLink;
@@ -175,33 +175,33 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Container(
           width: 240,
           height: 240,
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(12),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
           child: link == null
-              ? Center(child: Text(t('qr_loading'), style: const TextStyle(color: C.onAccent)))
+              ? Center(child: Text(t('qr_loading'), style: TextStyle(color: C.onAccent)))
               : QrImageView(data: link, padding: EdgeInsets.zero, backgroundColor: Colors.white),
         ),
       ));
-      out.add(const SizedBox(height: 18));
+      out.add(SizedBox(height: 18));
       for (final (i, s) in [t('qr_step1'), t('qr_step2'), t('qr_step3')].indexed) {
         out.add(Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text('${i + 1}.  $s', style: const TextStyle(fontSize: 14, color: C.soft, height: 1.45)),
+          padding: EdgeInsets.only(bottom: 8),
+          child: Text('${i + 1}.  $s', style: TextStyle(fontSize: 14, color: C.soft, height: 1.45)),
         ));
       }
-      out.add(Text(t('qr_note'), style: const TextStyle(fontSize: 12, color: C.label, height: 1.4)));
+      out.add(Text(t('qr_note'), style: TextStyle(fontSize: 12, color: C.label, height: 1.4)));
     } else {
       out.addAll([
         TextField(
           controller: _phone,
           keyboardType: TextInputType.phone,
-          style: const TextStyle(fontSize: 17),
+          style: TextStyle(fontSize: 17),
           decoration: InputDecoration(labelText: t('phone_label'), hintText: '+1 809 555 0123'),
           onSubmitted: (_) => d.submitPhone(_phone.text),
         ),
-        const SizedBox(height: 10),
-        Text(t('phone_hint'), style: const TextStyle(fontSize: 13, color: C.muted, height: 1.5)),
-        const SizedBox(height: 16),
+        SizedBox(height: 10),
+        Text(t('phone_hint'), style: TextStyle(fontSize: 13, color: C.muted, height: 1.5)),
+        SizedBox(height: 16),
         _busyButton(t('send_code'), () => d.submitPhone(_phone.text)),
       ]);
     }
@@ -218,22 +218,22 @@ class _LoginScreenState extends State<LoginScreen> {
     return [
       _title(t('code_title')),
       _body(t(key, {'p': d.codeTarget.isEmpty ? '' : '+${d.codeTarget}'})),
-      const SizedBox(height: 22),
+      SizedBox(height: 22),
       TextField(
         controller: _code,
         keyboardType: TextInputType.number,
         autofocus: true,
-        style: const TextStyle(fontSize: 22, letterSpacing: 6),
+        style: TextStyle(fontSize: 22, letterSpacing: 6),
         decoration: InputDecoration(labelText: t('code_label')),
         onSubmitted: (_) => d.submitCode(_code.text),
       ),
       _error(d.authError),
-      const SizedBox(height: 16),
+      SizedBox(height: 16),
       _busyButton(t('verify'), () => d.submitCode(_code.text)),
-      const SizedBox(height: 8),
+      SizedBox(height: 8),
       Row(children: [
         TextButton(onPressed: d.resendCode, child: Text(t('resend'))),
-        const Spacer(),
+        Spacer(),
         TextButton(onPressed: () => d.startOver(), child: Text(t('start_over'))),
       ]),
     ];
@@ -243,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _title(t('pw_title')),
         _body(t('pw_body')),
         if (d.passwordHint.isNotEmpty) _body(t('pw_hint', {'h': d.passwordHint})),
-        const SizedBox(height: 22),
+        SizedBox(height: 22),
         TextField(
           controller: _pw,
           obscureText: _hidePw,
@@ -259,23 +259,23 @@ class _LoginScreenState extends State<LoginScreen> {
           onSubmitted: (_) => d.submitPassword(_pw.text),
         ),
         _error(d.authError),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _busyButton(t('verify'), () => d.submitPassword(_pw.text)),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => d.startOver(), child: Text(t('start_over')))),
       ];
 
   List<Widget> _emailStep(bool code) => [
         _title(t('email_title')),
         _body(code ? t('email_code_body', {'e': d.emailPattern}) : t('email_body')),
-        const SizedBox(height: 22),
+        SizedBox(height: 22),
         TextField(
           controller: code ? _code : _email,
           keyboardType: code ? TextInputType.number : TextInputType.emailAddress,
           decoration: InputDecoration(labelText: code ? t('code_label') : t('email_label')),
         ),
         _error(d.authError),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _busyButton(t('verify'), () => code ? d.submitEmailCode(_code.text) : d.submitEmail(_email.text)),
         Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => d.startOver(), child: Text(t('start_over')))),
       ];
@@ -283,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen> {
   List<Widget> _messageStep(String msg) => [
         _title(t('login_title')),
         _body(msg),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         FilledButton(onPressed: () => d.startOver(qr: true), child: Text(t('start_over'))),
       ];
 
@@ -316,10 +316,10 @@ class _LoginScreenState extends State<LoginScreen> {
         break;
       default:
         body = [
-          const SizedBox(height: 80),
-          const Center(child: CircularProgressIndicator()),
-          const SizedBox(height: 18),
-          Center(child: Text(t('connecting'), style: const TextStyle(color: C.muted))),
+          SizedBox(height: 80),
+          Center(child: CircularProgressIndicator()),
+          SizedBox(height: 18),
+          Center(child: Text(t('connecting'), style: TextStyle(color: C.muted))),
           _error(d.authError),
         ];
     }

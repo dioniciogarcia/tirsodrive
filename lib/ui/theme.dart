@@ -1,29 +1,36 @@
 import 'package:flutter/material.dart';
 
 class C {
-  static const bg = Color(0xFF0E1320);
-  static const panel = Color(0xFF0B101B);
-  static const surface = Color(0xFF161D2E);
-  static const surface2 = Color(0xFF1A2236);
-  static const raised = Color(0xFF2A3654);
-  static const border = Color(0xFF232C42);
-  static const border2 = Color(0xFF2E3A57);
-  static const divider = Color(0xFF1D2539);
-  static const text = Color(0xFFE6EAF2);
-  static const soft = Color(0xFFB5BED0);
-  static const muted = Color(0xFF9AA4B8);
-  static const label = Color(0xFF8C97AD);
-  static const accent = Color(0xFF3BA7F5);
-  static const accentSoft = Color(0xFF7CC4FA);
-  static const onAccent = Color(0xFF08111F);
-  static const green = Color(0xFF6FD39A);
-  static const greenBg = Color(0xFF12261F);
-  static const greenBorder = Color(0xFF1E4A38);
-  static const amber = Color(0xFFF5A524);
-  static const amberBg = Color(0xFF2A1E0C);
-  static const amberBorder = Color(0xFF5A3D10);
-  static const amberText = Color(0xFFFBD38D);
-  static const red = Color(0xFFE86F6F);
+  /// true = dark colors. Set from Settings (Light / Dark / Automatic).
+  static bool dark = true;
+  static Color get bg => dark ? const Color(0xFF0E1320) : const Color(0xFFF4F6FA);
+  static Color get panel => dark ? const Color(0xFF0B101B) : const Color(0xFFFFFFFF);
+  static Color get surface => dark ? const Color(0xFF161D2E) : const Color(0xFFFFFFFF);
+  static Color get surface2 => dark ? const Color(0xFF1A2236) : const Color(0xFFEEF2F8);
+  static Color get raised => dark ? const Color(0xFF2A3654) : const Color(0xFFDCE6F5);
+  static Color get border => dark ? const Color(0xFF232C42) : const Color(0xFFE0E6EF);
+  static Color get border2 => dark ? const Color(0xFF2E3A57) : const Color(0xFFCBD4E1);
+  static Color get divider => dark ? const Color(0xFF1D2539) : const Color(0xFFE6EAF1);
+  static Color get text => dark ? const Color(0xFFE6EAF2) : const Color(0xFF111827);
+  static Color get soft => dark ? const Color(0xFFB5BED0) : const Color(0xFF374151);
+  static Color get muted => dark ? const Color(0xFF9AA4B8) : const Color(0xFF5B6577);
+  static Color get label => dark ? const Color(0xFF8C97AD) : const Color(0xFF697386);
+  static Color get accent => dark ? const Color(0xFF3BA7F5) : const Color(0xFF1683D6);
+  static Color get accentSoft => dark ? const Color(0xFF7CC4FA) : const Color(0xFF0F6CB3);
+  static Color get onAccent => dark ? const Color(0xFF08111F) : const Color(0xFFFFFFFF);
+  static Color get green => dark ? const Color(0xFF6FD39A) : const Color(0xFF1C8F52);
+  static Color get greenBg => dark ? const Color(0xFF12261F) : const Color(0xFFE7F6EE);
+  static Color get greenBorder => dark ? const Color(0xFF1E4A38) : const Color(0xFFBCE3CC);
+  static Color get greenSub => dark ? C.greenSub : const Color(0xFF2F6B4B);
+  static Color get amber => dark ? const Color(0xFFF5A524) : const Color(0xFFF5A524);
+  static Color get amberBg => dark ? const Color(0xFF2A1E0C) : const Color(0xFFFFF6E3);
+  static Color get amberBorder => dark ? const Color(0xFF5A3D10) : const Color(0xFFF0D39B);
+  static Color get amberText => dark ? const Color(0xFFFBD38D) : const Color(0xFF8A5A00);
+  static Color get amberSub => dark ? C.amberSub : const Color(0xFF6B4A12);
+  static Color get amberTip => dark ? C.amberTip : const Color(0xFF7A5A1F);
+  static Color get red => dark ? const Color(0xFFE86F6F) : const Color(0xFFC93C3C);
+  static Color get selected => dark ? C.selected : const Color(0xFFDCEBFB);
+  static Color get strong => dark ? const Color(0xFFFFFFFF) : const Color(0xFF0B1220);
 }
 
 const String displayFont = 'SpaceGrotesk';
@@ -31,10 +38,10 @@ const String displayFont = 'SpaceGrotesk';
 ThemeData buildTheme() {
   final base = ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: C.dark ? Brightness.dark : Brightness.light,
     fontFamily: 'Inter',
     scaffoldBackgroundColor: C.bg,
-    colorScheme: const ColorScheme.dark(
+    colorScheme: (C.dark ? ColorScheme.dark() : ColorScheme.light()).copyWith(
       primary: C.accent,
       onPrimary: C.onAccent,
       secondary: C.accentSoft,
@@ -45,7 +52,7 @@ ThemeData buildTheme() {
   );
   return base.copyWith(
     dividerColor: C.divider,
-    snackBarTheme: const SnackBarThemeData(
+    snackBarTheme: SnackBarThemeData(
       backgroundColor: C.raised,
       contentTextStyle: TextStyle(color: C.text, fontFamily: 'Inter'),
       behavior: SnackBarBehavior.floating,
@@ -53,11 +60,11 @@ ThemeData buildTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: C.surface,
-      labelStyle: const TextStyle(color: C.muted),
-      hintStyle: const TextStyle(color: C.label),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.border2)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: C.accent, width: 1.6)),
+      labelStyle: TextStyle(color: C.muted),
+      hintStyle: TextStyle(color: C.label),
+      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.border2)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: C.accent, width: 1.6)),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -66,8 +73,8 @@ ThemeData buildTheme() {
         foregroundColor: C.onAccent,
         disabledBackgroundColor: C.raised,
         disabledForegroundColor: C.muted,
-        minimumSize: const Size(48, 52),
-        textStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16),
+        minimumSize: Size(48, 52),
+        textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
@@ -75,22 +82,22 @@ ThemeData buildTheme() {
       style: OutlinedButton.styleFrom(
         foregroundColor: C.text,
         backgroundColor: C.surface,
-        side: const BorderSide(color: C.border2),
-        minimumSize: const Size(44, 44),
-        textStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 14),
+        side: BorderSide(color: C.border2),
+        minimumSize: Size(44, 44),
+        textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: C.accentSoft, textStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
+      style: TextButton.styleFrom(foregroundColor: C.accentSoft, textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: C.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: C.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: C.border)),
     ),
-    bottomSheetTheme: const BottomSheetThemeData(backgroundColor: C.surface, showDragHandle: true),
+    bottomSheetTheme: BottomSheetThemeData(backgroundColor: C.surface, showDragHandle: true),
     popupMenuTheme: PopupMenuThemeData(color: C.surface2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(color: C.accent, linearTrackColor: C.border, circularTrackColor: C.border),
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: C.accent, linearTrackColor: C.border, circularTrackColor: C.border),
   );
 }
 
@@ -113,18 +120,19 @@ class SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text.toUpperCase(),
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: C.label),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: C.label),
       );
 }
 
 /// Small colored square with the file type, like "Z64" or "APK".
 class ExtBadge extends StatelessWidget {
   final String text;
-  final Color color;
+  final Color? color;
   final double size;
-  const ExtBadge(this.text, {super.key, this.color = C.accent, this.size = 42});
+  const ExtBadge(this.text, {super.key, this.color, this.size = 42});
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? C.accent;
     final label = text.isEmpty ? '···' : (text.length > 4 ? text.substring(0, 4) : text);
     return Container(
       width: size,
@@ -151,13 +159,13 @@ class Bar extends StatelessWidget {
 class Panel extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
-  final Color color;
-  final Color borderColor;
-  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.color = C.surface, this.borderColor = C.border});
+  final Color? color;
+  final Color? borderColor;
+  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.color, this.borderColor});
   @override
   Widget build(BuildContext context) => Container(
         padding: padding,
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor)),
+        decoration: BoxDecoration(color: color ?? C.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: borderColor ?? C.border)),
         child: child,
       );
 }
@@ -169,7 +177,7 @@ class LangSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget b(String code) => Padding(
-          padding: const EdgeInsets.all(3),
+          padding: EdgeInsets.all(3),
           child: Material(
             color: lang == code ? C.raised : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
@@ -177,7 +185,7 @@ class LangSwitch extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               onTap: () => onChanged(code),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                padding: EdgeInsets.symmetric(horizontal: 11, vertical: 7),
                 child: Text(code.toUpperCase(),
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lang == code ? C.text : C.muted)),
               ),

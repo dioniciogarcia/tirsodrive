@@ -172,6 +172,20 @@ class NativeBridge {
     await _ch.invokeMethod('openFile', {'path': path, 'mime': mime});
   }
 
+  /// Windows: plays a stream link in VLC when installed (plays everything), otherwise in the default browser.
+  static Future<void> openStreamUrl(String url) async {
+    final pf = [Platform.environment['ProgramFiles'], Platform.environment['ProgramFiles(x86)']];
+    for (final dir in pf) {
+      if (dir == null) continue;
+      final vlc = File('$dir\\VideoLAN\\VLC\\vlc.exe');
+      if (vlc.existsSync()) {
+        await Process.start(vlc.path, [url]);
+        return;
+      }
+    }
+    await Process.start('explorer.exe', [url]);
+  }
+
   static Future<void> showInFolder(String path) async {
     if (Platform.isWindows) await Process.start('explorer.exe', ['/select,', path]);
   }

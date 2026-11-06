@@ -4,19 +4,22 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' hide Category;
+
+import '../ui/theme.dart' show C;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../td/td_client.dart';
 import 'categories.dart';
 import 'native.dart';
+import 'stream_server.dart';
 import 'sync.dart';
 import 'strings.dart';
 
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.5.0';
+const String appVersion = '0.6.0';
 
 class DriveChannel {
   final int chatId;
@@ -147,12 +150,15 @@ enum AuthStep { starting, needApi, params, phone, qr, code, password, email, ema
 class Drive extends ChangeNotifier {
   final TdClient td = TdClient();
   late final SyncManager sync = SyncManager(this);
+  late final StreamServer streamer = StreamServer(this);
   late SharedPreferences _prefs;
 
   // settings
   String lang = 'en';
   int maxBytes = 2000 * 1024 * 1024; // Telegram's free limit (≈2 GB)
   String sortMode = 'new'; // new | old | az | za | big | small
+  String themeMode = 'dark'; // dark | light | system
+  final ValueNotifier<int> themeTick = ValueNotifier<int>(0);
   int apiId = builtInApiId;
   String apiHash = builtInApiHash;
 
@@ -228,6 +234,29 @@ class Drive extends ChangeNotifier {
     appLang = l;
     _prefs.setString('lang', l);
     notifyListeners();
+  }
+
+  Future<void> loadTheme() async {
+    final p = await SharedPreferences.getInstance();
+    themeMode = p.getString('theme') ?? 'dark';
+    _applyTheme();
+    PlatformDispatcher.instance.onPlatformBrightnessChanged = () {
+      if (themeMode == 'system') {
+        _applyTheme();
+        themeTick.value++;
+      }
+    };
+  }
+
+  void _applyTheme() {
+    C.dark = themeMode == 'dark' || (themeMode == 'system' && PlatformDispatcher.instance.platformBrightness == Brightness.dark);
+  }
+
+  void setTheme(String m) {
+    themeMode = m;
+    _prefs.setString('theme', m);
+    _applyTheme();
+    themeTick.value++;
   }
 
   void setSort(String m) {
@@ -886,6 +915,8 @@ class Drive extends ChangeNotifier {
       } catch (_) {}
     }
   }
+
+  void markTemp(List<int> ids) => _markTemp(ids);
 
   void _markTemp(List<int> ids) {
     final cur = (_prefs.getStringList('temp_files') ?? <String>[]).toSet()..addAll(ids.map((e) => '$e'));

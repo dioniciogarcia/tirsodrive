@@ -6,15 +6,17 @@ import 'package:flutter/material.dart';
 import '../core/categories.dart';
 import '../core/drive.dart';
 import '../core/native.dart';
+import '../core/stream_server.dart';
 import '../core/strings.dart';
+import 'media_viewer.dart';
 import 'theme.dart';
 
 Color colorForFile(Drive d, DriveFile f) => d.channelById(f.chatId)?.category?.color ?? C.accent;
 
 Future<void> showFileMenu(BuildContext context, Drive d, DriveFile f, {VoidCallback? onSelect}) {
-  Widget item(BuildContext ctx, IconData icon, String label, VoidCallback onTap, {Color color = C.text}) => ListTile(
-        leading: Icon(icon, color: color),
-        title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+  Widget item(BuildContext ctx, IconData icon, String label, VoidCallback onTap, {Color? color}) => ListTile(
+        leading: Icon(icon, color: color ?? C.text),
+        title: Text(label, style: TextStyle(color: color ?? C.text, fontWeight: FontWeight.w500)),
         onTap: () {
           Navigator.pop(ctx);
           onTap();
@@ -27,11 +29,13 @@ Future<void> showFileMenu(BuildContext context, Drive d, DriveFile f, {VoidCallb
       child: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
-            title: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text('${formatBytes(f.size)} · ${d.channelName(f.chatId)}', style: const TextStyle(color: C.muted)),
+            title: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('${formatBytes(f.size)} · ${d.channelName(f.chatId)}', style: TextStyle(color: C.muted)),
           ),
-          const Divider(height: 1),
-          item(ctx, Icons.open_in_new, t('menu_open'), () => d.download(f, 'open')),
+          Divider(height: 1),
+          if (isPlayable(f)) item(ctx, Icons.play_circle_outline, t('menu_play'), () => playMedia(context, d, f), color: C.accentSoft),
+          if (isImage(f)) item(ctx, Icons.image_outlined, t('menu_view'), () => viewImage(context, d, f), color: C.accentSoft),
+          item(ctx, Icons.open_in_new, t(isPlayable(f) || isImage(f) ? 'menu_open_other' : 'menu_open'), () => d.download(f, 'open')),
           item(ctx, Icons.download_outlined, t('menu_save'), () => d.download(f, 'save')),
           item(ctx, Icons.share_outlined, t('menu_share'), () => showShareSheet(context, d, [f])),
           item(ctx, Icons.copy_all_outlined, t('menu_copy'), () => copyOrMove(context, d, [f], move: false)),
@@ -40,7 +44,7 @@ Future<void> showFileMenu(BuildContext context, Drive d, DriveFile f, {VoidCallb
           if (onSelect != null) item(ctx, Icons.check_circle_outline, t('menu_select'), onSelect),
           item(ctx, Icons.info_outline, t('menu_info'), () => showFileInfo(context, d, f)),
           item(ctx, Icons.delete_outline, t('menu_delete'), () => confirmDeleteFiles(context, d, [f]), color: C.red),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
         ]),
       ),
     ),
@@ -49,16 +53,16 @@ Future<void> showFileMenu(BuildContext context, Drive d, DriveFile f, {VoidCallb
 
 void showFileInfo(BuildContext context, Drive d, DriveFile f) {
   Widget row(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
+        padding: EdgeInsets.symmetric(vertical: 5),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 110, child: Text(k, style: const TextStyle(color: C.muted, fontSize: 13))),
-          Expanded(child: SelectableText(v, style: const TextStyle(fontSize: 13))),
+          SizedBox(width: 110, child: Text(k, style: TextStyle(color: C.muted, fontSize: 13))),
+          Expanded(child: SelectableText(v, style: TextStyle(fontSize: 13))),
         ]),
       );
   showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(t('menu_info'), style: const TextStyle(fontFamily: displayFont)),
+      title: Text(t('menu_info'), style: TextStyle(fontFamily: displayFont)),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         row(t('info_name'), f.name),
         row(t('info_size'), '${formatBytes(f.size)} (${f.size} bytes)'),
@@ -76,13 +80,13 @@ Future<void> confirmDeleteFiles(BuildContext context, Drive d, List<DriveFile> f
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(files.length == 1 ? t('delete_title') : t('delete_title_n', {'n': files.length}), style: const TextStyle(fontFamily: displayFont)),
+      title: Text(files.length == 1 ? t('delete_title') : t('delete_title_n', {'n': files.length}), style: TextStyle(fontFamily: displayFont)),
       content: Text(files.length == 1 ? t('delete_body', {'n': files.first.name}) : t('delete_body_n'),
-          style: const TextStyle(color: C.soft, height: 1.4)),
+          style: TextStyle(color: C.soft, height: 1.4)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: C.red, foregroundColor: Colors.white, minimumSize: const Size(96, 44)),
+          style: FilledButton.styleFrom(backgroundColor: C.red, foregroundColor: Colors.white, minimumSize: Size(96, 44)),
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(t('menu_delete')),
         ),
@@ -99,18 +103,18 @@ Future<void> renameDialog(BuildContext context, Drive d, DriveFile f) async {
   final name = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(t('menu_rename'), style: const TextStyle(fontFamily: displayFont)),
+      title: Text(t('menu_rename'), style: TextStyle(fontFamily: displayFont)),
       content: SizedBox(
         width: 420,
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           TextField(controller: ctrl, autofocus: true, onSubmitted: (v) => Navigator.pop(ctx, v)),
-          const SizedBox(height: 10),
-          Text(t('rename_note'), style: const TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
+          SizedBox(height: 10),
+          Text(t('rename_note'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
         ]),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
-        FilledButton(style: FilledButton.styleFrom(minimumSize: const Size(96, 44)), onPressed: () => Navigator.pop(ctx, ctrl.text), child: Text(t('menu_rename'))),
+        FilledButton(style: FilledButton.styleFrom(minimumSize: Size(96, 44)), onPressed: () => Navigator.pop(ctx, ctrl.text), child: Text(t('menu_rename'))),
       ],
     ),
   );
@@ -126,8 +130,8 @@ Future<void> copyOrMove(BuildContext context, Drive d, List<DriveFile> files, {r
     builder: (ctx) {
       Widget tile(String id, String label, String sub, Color color, String tag) => ListTile(
             leading: ExtBadge(tag, color: color, size: 36),
-            title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text(sub, style: const TextStyle(color: C.muted, fontSize: 12)),
+            title: Text(label, style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(sub, style: TextStyle(color: C.muted, fontSize: 12)),
             onTap: () => Navigator.pop(ctx, id),
           );
       final tiles = <Widget>[];
@@ -147,9 +151,9 @@ Future<void> copyOrMove(BuildContext context, Drive d, List<DriveFile> files, {r
         maxChildSize: 0.95,
         builder: (ctx, scroll) => Column(children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Text(move ? t('move_to_n', {'n': files.length}) : t('copy_to_n', {'n': files.length}),
-                style: const TextStyle(fontFamily: displayFont, fontSize: 20, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontFamily: displayFont, fontSize: 20, fontWeight: FontWeight.w600)),
           ),
           Expanded(child: ListView(controller: scroll, children: tiles)),
         ]),
@@ -191,47 +195,47 @@ class FileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isTv = RegExp(r'\bTV\.apk$', caseSensitive: false).hasMatch(file.name);
     return Material(
-      color: selected ? const Color(0xFF1E2A44) : Colors.transparent,
+      color: selected ? C.selected : Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 6),
           child: Row(children: [
             if (selecting)
               Padding(
-                padding: const EdgeInsets.only(right: 10),
+                padding: EdgeInsets.only(right: 10),
                 child: Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked, color: selected ? C.accent : C.label),
               ),
             ExtBadge(file.ext, color: color),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Flexible(child: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                  Flexible(child: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
                   if (isTv) ...[
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(5)),
-                      child: const Text('TV', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF1A1204))),
+                      child: Text('TV', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF1A1204))),
                     ),
                   ],
                 ]),
-                const SizedBox(height: 3),
+                SizedBox(height: 3),
                 Text(
                   [formatBytes(file.size), formatDate(file.date), ?channelLabel].join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: C.muted),
+                  style: TextStyle(fontSize: 12, color: C.muted),
                 ),
               ]),
             ),
             if (downloading)
-              const Padding(padding: EdgeInsets.only(left: 8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))),
-            if (!selecting) IconButton(tooltip: t('menu_info'), onPressed: onMenu, icon: const Icon(Icons.more_vert, color: C.muted)),
+              Padding(padding: EdgeInsets.only(left: 8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))),
+            if (!selecting) IconButton(tooltip: t('menu_info'), onPressed: onMenu, icon: Icon(Icons.more_vert, color: C.muted)),
           ]),
         ),
       ),
@@ -249,10 +253,10 @@ PreferredSizeWidget selectionBar({
 }) {
   return AppBar(
     backgroundColor: C.surface2,
-    leading: IconButton(tooltip: t('cancel'), onPressed: onClose, icon: const Icon(Icons.close)),
-    title: Text(t('selected_n', {'n': selected.length}), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+    leading: IconButton(tooltip: t('cancel'), onPressed: onClose, icon: Icon(Icons.close)),
+    title: Text(t('selected_n', {'n': selected.length}), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
     actions: [
-      IconButton(tooltip: t('select_all'), onPressed: onSelectAll, icon: const Icon(Icons.select_all)),
+      IconButton(tooltip: t('select_all'), onPressed: onSelectAll, icon: Icon(Icons.select_all)),
       IconButton(
         tooltip: t('menu_save'),
         onPressed: selected.isEmpty
@@ -263,7 +267,7 @@ PreferredSizeWidget selectionBar({
                 }
                 onClose();
               },
-        icon: const Icon(Icons.download_outlined),
+        icon: Icon(Icons.download_outlined),
       ),
       IconButton(
         tooltip: t('menu_share'),
@@ -274,7 +278,7 @@ PreferredSizeWidget selectionBar({
                 onClose();
                 await showShareSheet(context, d, list);
               },
-        icon: const Icon(Icons.share_outlined),
+        icon: Icon(Icons.share_outlined),
       ),
       IconButton(
         tooltip: t('menu_copy'),
@@ -285,7 +289,7 @@ PreferredSizeWidget selectionBar({
                 onClose();
                 await copyOrMove(context, d, list, move: false);
               },
-        icon: const Icon(Icons.copy_all_outlined),
+        icon: Icon(Icons.copy_all_outlined),
       ),
       IconButton(
         tooltip: t('menu_move'),
@@ -296,7 +300,7 @@ PreferredSizeWidget selectionBar({
                 onClose();
                 await copyOrMove(context, d, list, move: true);
               },
-        icon: const Icon(Icons.drive_file_move_outline),
+        icon: Icon(Icons.drive_file_move_outline),
       ),
       IconButton(
         tooltip: t('menu_delete'),
@@ -307,7 +311,7 @@ PreferredSizeWidget selectionBar({
                 onClose();
                 await confirmDeleteFiles(context, d, list);
               },
-        icon: const Icon(Icons.delete_outline, color: C.red),
+        icon: Icon(Icons.delete_outline, color: C.red),
       ),
     ],
   );
@@ -323,37 +327,37 @@ Future<void> showShareSheet(BuildContext context, Drive d, List<DriveFile> files
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(
           title: Text(files.length == 1 ? files.first.name : t('selected_n', {'n': files.length}),
-              maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: Text(formatBytes(files.fold<int>(0, (a, f) => a + f.size)), style: const TextStyle(color: C.muted)),
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text(formatBytes(files.fold<int>(0, (a, f) => a + f.size)), style: TextStyle(color: C.muted)),
         ),
-        const Divider(height: 1),
+        Divider(height: 1),
         ListTile(
-          leading: const Icon(Icons.send_outlined, color: C.accentSoft),
+          leading: Icon(Icons.send_outlined, color: C.accentSoft),
           title: Text(t('share_telegram')),
-          subtitle: Text(t('share_telegram_sub'), style: const TextStyle(color: C.muted, fontSize: 12)),
+          subtitle: Text(t('share_telegram_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
           onTap: () => Navigator.pop(ctx, 'tg'),
         ),
         if (Platform.isAndroid)
           ListTile(
-            leading: const Icon(Icons.share_outlined, color: C.accentSoft),
+            leading: Icon(Icons.share_outlined, color: C.accentSoft),
             title: Text(t('share_apps')),
-            subtitle: Text(t('share_apps_sub'), style: const TextStyle(color: C.muted, fontSize: 12)),
+            subtitle: Text(t('share_apps_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
             onTap: () => Navigator.pop(ctx, 'apps'),
           ),
         for (final (label, path) in clouds)
           ListTile(
-            leading: const Icon(Icons.cloud_upload_outlined, color: C.accentSoft),
+            leading: Icon(Icons.cloud_upload_outlined, color: C.accentSoft),
             title: Text(t('send_cloud', {'c': label})),
-            subtitle: Text('$path\\TirsoDrive', style: const TextStyle(color: C.muted, fontSize: 12)),
+            subtitle: Text('$path\\TirsoDrive', style: TextStyle(color: C.muted, fontSize: 12)),
             onTap: () => Navigator.pop(ctx, 'cloud:$label|$path'),
           ),
         if (Platform.isWindows && clouds.isEmpty)
           ListTile(
-            leading: const Icon(Icons.cloud_off_outlined, color: C.label),
-            title: Text(t('no_cloud'), style: const TextStyle(color: C.muted)),
-            subtitle: Text(t('no_cloud_sub'), style: const TextStyle(color: C.label, fontSize: 12)),
+            leading: Icon(Icons.cloud_off_outlined, color: C.label),
+            title: Text(t('no_cloud'), style: TextStyle(color: C.muted)),
+            subtitle: Text(t('no_cloud_sub'), style: TextStyle(color: C.label, fontSize: 12)),
           ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
       ]),
     ),
   );
@@ -404,7 +408,7 @@ class _ChatPickerState extends State<_ChatPicker> {
           leading: CircleAvatar(
             backgroundColor: C.surface2,
             child: s.chatId == widget.drive.myId
-                ? const Icon(Icons.bookmark_outline, color: C.accentSoft)
+                ? Icon(Icons.bookmark_outline, color: C.accentSoft)
                 : Icon(s.group ? Icons.group_outlined : Icons.person_outline, color: C.soft),
           ),
           title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -418,18 +422,18 @@ class _ChatPickerState extends State<_ChatPicker> {
       maxChildSize: 0.95,
       builder: (ctx, scroll) => Column(children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: TextField(
             autofocus: false,
-            decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: t('share_search')),
+            decoration: InputDecoration(prefixIcon: Icon(Icons.search), hintText: t('share_search')),
             onChanged: (v) => setState(() => q = v),
           ),
         ),
         Expanded(
           child: ListView(controller: scroll, children: [
-            if (c1.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 4), child: SectionLabel(t('share_chats'))),
+            if (c1.isNotEmpty) Padding(padding: EdgeInsets.fromLTRB(16, 8, 16, 4), child: SectionLabel(t('share_chats'))),
             ...c1.map(tile),
-            if (c2.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 4), child: SectionLabel(t('share_contacts'))),
+            if (c2.isNotEmpty) Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 4), child: SectionLabel(t('share_contacts'))),
             ...c2.map(tile),
           ]),
         ),

@@ -54,7 +54,7 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
 (DONE in 0.4.0: sharing — send to chats/contacts via forwardMessages send_copy+remove_caption; Android share sheet (MainActivity.shareFiles); Windows copy into Google Drive/OneDrive/Dropbox folders (NativeBridge.cloudFolders). Channel sort with a remembered sortMode. Still possible later: a direct Google Drive API upload.)
 (DONE in 0.5.0: folder sync — lib/core/sync.dart + sync_screen.dart; Android SAF tree (pickTree/listTree/writeToTree in MainActivity); state in app-support sync_v1.json; caption `sync=<id> path=<rel>`; changed files replace the old message after the upload; local deletions are never propagated. Runs at start + every 15 min while open (no background scheduling while the app is closed yet). Sharing uses ShareProvider (no copy) + automatic cleanup of TDLib's local copies (prefs temp_files).)
 5. Windows virtual drive (T:) — start with WebDAV + "Map network drive", maybe WinFsp later.
-6. Video/image streaming without a full download; in-app image viewer.
+(DONE in 0.6.0: streaming via a local 127.0.0.1 range server (lib/core/stream_server.dart: downloadFile offset + getFileDownloadedPrefixSize + readFilePart); in-app player on Android (video_player); Windows opens VLC or the browser; image viewer; Light/Dark/Automatic theme (C.* are runtime getters; MaterialApp keyed by themeTick).)
 7. The 11 extras above.
 8. Tirso Compiler integration: bot per program (Option B), upload APKs to the "TD - <Console> APKs" channels.
 9. Future: an all-in-one emulator launcher (libretro-style cores: NES/SNES/Genesis/GB/GBA/N64 (Mupen64Plus-Next)/DS (melonDS)/PS1/PSP (PPSSPP)/GC-Wii (Dolphin); PS2 hard).
