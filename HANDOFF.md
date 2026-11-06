@@ -49,6 +49,7 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
   splitting files over 2 GB (keep OFF for now).
 
 ## Still to build (suggested order)
+0. **FIRST (user-reported):** Android pauses uploads when the screen locks or the user switches apps. Add a foreground service (data-sync type) with a progress notification (Pause/Cancel), a wake lock, and a persisted queue that resumes after the app or phone restarts. Store picked SAF URIs (persistable permission is already taken).
 1. Global search across all channels (local index, works offline) + filters (category, type/extension, console, size, upload date, original date — stored in the caption as `mtime=`).
 2. Long-press menu additions: Copy to…, Move to…, Rename (app-side display name), multi-select, bulk actions.
 3. Sharing: to Telegram contacts (send as a copy, no "forwarded from"), the Android share sheet / Windows share (WhatsApp, Instagram, Drive…), and "Send to cloud" (Drive/OneDrive desktop folders; a direct Google Drive API upload later).
@@ -64,3 +65,4 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
 ## Known limits right now
 - Android: the app must stay open while uploading; the queue isn't remembered after closing.
 - TV not tested yet by the user.
+- Windows 0.1.3 (portable) delivered; the user is testing it with GBA ROM uploads.
