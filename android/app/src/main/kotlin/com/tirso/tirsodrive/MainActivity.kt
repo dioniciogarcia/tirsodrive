@@ -15,7 +15,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.view.WindowManager
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -29,7 +29,7 @@ import java.io.FileInputStream
  *  - openFile: opens a downloaded file in another app (video player, gallery, emulator...)
  *  - keepAwake: keeps the screen on while transfers run
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val channelName = "tirsodrive/native"
     private val pickRequest = 4711
     private val treeRequest = 4713
@@ -79,6 +79,26 @@ class MainActivity : FlutterActivity() {
                 "shareFiles" -> background(result) {
                     shareFiles(call.argument<List<String>>("paths")!!, call.argument<List<String>>("names")!!, call.argument<List<String>>("mimes")!!)
                     true
+                }
+                "deviceState" -> {
+                    var wifi: Boolean? = null
+                    try {
+                        val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                        val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+                        wifi = caps != null && (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET))
+                    } catch (_: Exception) { }
+                    var charging: Boolean? = null
+                    try {
+                        val bm = getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+                        charging = bm.isCharging
+                    } catch (_: Exception) { }
+                    result.success(mapOf("wifi" to wifi, "charging" to charging))
+                }
+                "isTv" -> {
+                    val ui = getSystemService(android.content.Context.UI_MODE_SERVICE) as android.app.UiModeManager
+                    result.success(ui.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||
+                        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK))
                 }
                 "askNotifications" -> {
                     if (Build.VERSION.SDK_INT >= 33 &&

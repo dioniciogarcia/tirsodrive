@@ -6,6 +6,7 @@ import 'core/drive.dart';
 import 'core/strings.dart';
 import 'ui/desktop_shell.dart';
 import 'ui/library_screen.dart';
+import 'ui/lock_screen.dart';
 import 'ui/login_screen.dart';
 import 'ui/settings_screen.dart';
 import 'ui/theme.dart';
@@ -32,22 +33,26 @@ class TirsoDriveApp extends StatelessWidget {
         title: 'TirsoDrive',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
-        home: ListenableBuilder(
-          listenable: drive,
-          builder: (context, _) {
-            switch (drive.step) {
-              case AuthStep.needApi:
-                return ApiSetupScreen(drive: drive);
-              case AuthStep.ready:
-                return LayoutBuilder(
-                  builder: (context, box) => box.maxWidth >= 1000
-                      ? DesktopShell(drive: drive)
-                      : MainShell(drive: drive),
-                );
-              default:
-                return LoginScreen(drive: drive);
-            }
-          },
+        home: _LockGate(
+          drive: drive,
+          child: ListenableBuilder(
+            listenable: drive,
+            builder: (context, _) {
+              switch (drive.step) {
+                case AuthStep.needApi:
+                  return ApiSetupScreen(drive: drive);
+                case AuthStep.ready:
+                  return LayoutBuilder(
+                    builder: (context, box) =>
+                        box.maxWidth >= 1000 || drive.isTv
+                        ? DesktopShell(drive: drive)
+                        : MainShell(drive: drive),
+                  );
+                default:
+                  return LoginScreen(drive: drive);
+              }
+            },
+          ),
         ),
       ),
     );
@@ -119,5 +124,60 @@ class _MainShellState extends State<MainShell> {
         ],
       ),
     );
+  }
+}
+
+/// Shows the PIN screen when the app opens, and again after it was in the background for over a minute.
+class _LockGate extends StatefulWidget {
+  final Drive drive;
+  final Widget child;
+  const _LockGate({required this.drive, required this.child});
+  @override
+  State<_LockGate> createState() => _LockGateState();
+}
+
+class _LockGateState extends State<_LockGate> with WidgetsBindingObserver {
+  late bool _locked = widget.drive.lockEnabled;
+  DateTime? _away;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.drive.isTv) {
+      FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _away ??= DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_away != null &&
+          widget.drive.lockEnabled &&
+          DateTime.now().difference(_away!).inSeconds > 60) {
+        setState(() => _locked = true);
+      }
+      _away = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_locked && widget.drive.lockEnabled) {
+      return LockScreen(
+        drive: widget.drive,
+        onUnlocked: () => setState(() => _locked = false),
+      );
+    }
+    return widget.child;
   }
 }

@@ -50,6 +50,11 @@ class TransfersScreen extends StatelessWidget {
                     padding: EdgeInsets.only(bottom: 12),
                     child: Panel(color: C.amberBg, borderColor: C.amberBorder, child: Text(t('tr_paused'), style: TextStyle(color: C.amberText, fontWeight: FontWeight.w600))),
                   ),
+                if (drive.uploadsBlocked != null && next.any((x) => x.upload))
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Panel(color: C.amberBg, borderColor: C.amberBorder, child: Text(drive.uploadsBlocked!, style: TextStyle(color: C.amberText, fontWeight: FontWeight.w600))),
+                  ),
                 if (current.isEmpty && next.isEmpty)
                   Panel(
                     padding: EdgeInsets.symmetric(vertical: 36, horizontal: 20),
@@ -120,6 +125,8 @@ class TransfersScreen extends StatelessWidget {
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(tr.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: C.soft)),
+                            if (tr.status == TStatus.done && tr.verified)
+                              Text(t('verified'), style: TextStyle(fontSize: 12, color: C.green)),
                             if (tr.status != TStatus.done)
                               Text(tr.error == null ? _status(tr) : '${_status(tr)} · ${tr.error}',
                                   maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: C.muted)),

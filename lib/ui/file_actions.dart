@@ -41,6 +41,8 @@ Future<void> showFileMenu(BuildContext context, Drive d, DriveFile f, {VoidCallb
           item(ctx, Icons.copy_all_outlined, t('menu_copy'), () => copyOrMove(context, d, [f], move: false)),
           item(ctx, Icons.drive_file_move_outline, t('menu_move'), () => copyOrMove(context, d, [f], move: true)),
           item(ctx, Icons.edit_outlined, t('menu_rename'), () => renameDialog(context, d, f)),
+          item(ctx, f.fav ? Icons.star : Icons.star_border, t(f.fav ? 'fav_remove' : 'fav_add'), () => d.setFavorite([f], !f.fav), color: f.fav ? C.amber : null),
+          item(ctx, Icons.collections_bookmark_outlined, t('col_add'), () => collectionDialog(context, d, [f])),
           if (onSelect != null) item(ctx, Icons.check_circle_outline, t('menu_select'), onSelect),
           item(ctx, Icons.info_outline, t('menu_info'), () => showFileInfo(context, d, f)),
           item(ctx, Icons.delete_outline, t('menu_delete'), () => confirmDeleteFiles(context, d, [f]), color: C.red),
@@ -80,15 +82,15 @@ Future<void> confirmDeleteFiles(BuildContext context, Drive d, List<DriveFile> f
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text(files.length == 1 ? t('delete_title') : t('delete_title_n', {'n': files.length}), style: TextStyle(fontFamily: displayFont)),
-      content: Text(files.length == 1 ? t('delete_body', {'n': files.first.name}) : t('delete_body_n'),
+      title: Text(files.length == 1 ? t('trash_title') : t('trash_title_n', {'n': files.length}), style: TextStyle(fontFamily: displayFont)),
+      content: Text(t('trash_body'),
           style: TextStyle(color: C.soft, height: 1.4)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: C.red, foregroundColor: Colors.white, minimumSize: Size(96, 44)),
           onPressed: () => Navigator.pop(ctx, true),
-          child: Text(t('menu_delete')),
+          child: Text(t('move_to_trash')),
         ),
       ],
     ),
@@ -119,6 +121,33 @@ Future<void> renameDialog(BuildContext context, Drive d, DriveFile f) async {
     ),
   );
   if (name != null) await d.renameFile(f, name);
+}
+
+/// Add files to a collection (existing or new). Collections are saved in Telegram, so every device sees them.
+Future<void> collectionDialog(BuildContext context, Drive d, List<DriveFile> files) async {
+  final ctrl = TextEditingController();
+  final existing = d.collections;
+  final name = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(t('col_add'), style: TextStyle(fontFamily: displayFont)),
+      content: SizedBox(
+        width: 420,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (existing.isNotEmpty) ...[
+            Wrap(spacing: 8, runSpacing: 8, children: [for (final c in existing) ActionChip(label: Text(c), onPressed: () => Navigator.pop(ctx, c))]),
+            SizedBox(height: 14),
+          ],
+          TextField(controller: ctrl, decoration: InputDecoration(labelText: t('col_new')), onSubmitted: (v) => Navigator.pop(ctx, v)),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t('cancel'))),
+        FilledButton(style: FilledButton.styleFrom(minimumSize: Size(96, 44)), onPressed: () => Navigator.pop(ctx, ctrl.text), child: Text(t('create'))),
+      ],
+    ),
+  );
+  if (name != null && name.trim().isNotEmpty) await d.addToCollection(files, name.trim());
 }
 
 /// Asks where to copy/move [files], then does it.
@@ -175,6 +204,7 @@ class FileRow extends StatelessWidget {
   final bool selecting;
   final bool selected;
   final String? channelLabel; // shown in search results
+  final String? artUrl; // ROM box art
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onMenu;
@@ -189,6 +219,7 @@ class FileRow extends StatelessWidget {
     this.selecting = false,
     this.selected = false,
     this.channelLabel,
+    this.artUrl,
   });
 
   @override
@@ -209,7 +240,21 @@ class FileRow extends StatelessWidget {
                 padding: EdgeInsets.only(right: 10),
                 child: Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked, color: selected ? C.accent : C.label),
               ),
-            ExtBadge(file.ext, color: color),
+            if (artUrl == null)
+              ExtBadge(file.ext, color: color)
+            else
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  artUrl!,
+                  width: 52,
+                  height: 52,
+                  fit: BoxFit.cover,
+                  cacheWidth: 156,
+                  errorBuilder: (_, _, _) => ExtBadge(file.ext, color: color, size: 52),
+                  loadingBuilder: (c, child, p) => p == null ? child : ExtBadge(file.ext, color: color, size: 52),
+                ),
+              ),
             SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -279,6 +324,17 @@ PreferredSizeWidget selectionBar({
                 await showShareSheet(context, d, list);
               },
         icon: Icon(Icons.share_outlined),
+      ),
+      IconButton(
+        tooltip: t('fav_add'),
+        onPressed: selected.isEmpty
+            ? null
+            : () {
+                final list = List<DriveFile>.from(selected);
+                onClose();
+                d.setFavorite(list, true);
+              },
+        icon: Icon(Icons.star_border),
       ),
       IconButton(
         tooltip: t('menu_copy'),

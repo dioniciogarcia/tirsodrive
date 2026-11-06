@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!-- Lets TirsoDrive run on Android TV / Google TV / Fire TV as well as phones. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

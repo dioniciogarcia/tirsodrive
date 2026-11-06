@@ -4,6 +4,7 @@ import '../core/categories.dart';
 import '../core/drive.dart';
 import '../core/strings.dart';
 import 'channel_screen.dart';
+import 'extras_screens.dart';
 import 'search_screen.dart';
 import 'theme.dart';
 import 'upload_review.dart';
@@ -141,6 +142,20 @@ class LibraryScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  SizedBox(height: 18),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final (label, icon, color, page) in [
+                      (t('favorites'), Icons.star_border, C.amber, () => FileListScreen(drive: drive, title: t('favorites'), files: () => drive.allFiles.where((f) => f.fav).toList(), empty: t('favorites_empty'))),
+                      (t('collections'), Icons.collections_bookmark_outlined, C.accentSoft, () => CollectionsScreen(drive: drive)),
+                      (t('duplicates'), Icons.content_copy_outlined, C.soft, () => DuplicatesScreen(drive: drive)),
+                      (t('trash'), Icons.delete_outline, C.red, () => TrashScreen(drive: drive)),
+                    ])
+                      ActionChip(
+                        avatar: Icon(icon, size: 18, color: color),
+                        label: Text(label),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page())),
+                      ),
+                  ]),
                   SizedBox(height: 24),
                   Row(children: [
                     SectionLabel(t('section_mine')),

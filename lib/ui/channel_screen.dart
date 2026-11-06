@@ -166,6 +166,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
                   FileRow(
                     file: f,
                     color: _color,
+                    artUrl: boxArtUrl(widget.categoryKey, f.name),
                     selecting: selecting,
                     selected: _sel.contains(f.messageId),
                     downloading: d.transfers.any((x) => !x.upload && !x.finished && x.file?.fileId == f.fileId),

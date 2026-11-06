@@ -1,16 +1,16 @@
-# TirsoDrive — Android 0.6.1 / Windows 0.1.3
+# TirsoDrive — Android 0.7.0 / Windows 0.1.3
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
 
 ## Step 1 — Install the APK
 
-1. Copy `TirsoDrive-0.6.1.apk` to the phone (USB cable, Google Drive, or Quick Share).
+1. Copy `TirsoDrive-0.7.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
 2. Tap the file. If Android asks, allow **Install unknown apps** for the app you opened it with.
 3. Tap **Install**. If an older TirsoDrive is installed, this updates it and you stay signed in.
 
 For a TV (Google TV Streamer, TCL, Fire TV), use the same APK. You can sideload it with
-"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.6.1.apk`
+"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.7.0.apk`
 
 ## Step 2 — Sign in
 
@@ -67,6 +67,14 @@ On Windows:
 
 ## Changes
 
+- **0.7.0:** **Trash:** Delete now moves files to a "TD - Trash" channel for 30 days (restore anytime; emptied automatically after 30 days).
+  **Favorites** and **Collections** (file menu ★ / "Add to collection…"; saved in Telegram so every device sees them).
+  **Duplicates** finder (same size and type anywhere; keeps the oldest copy, extras go to the Trash).
+  **ROM box art** from libretro thumbnails in ROM channels (needs standard No-Intro file names).
+  **Upload rules** (Settings): only on Wi-Fi, only while charging, pause between hours.
+  **Integrity check:** every upload's size is verified in Telegram ("Verified ✓" in Transfers).
+  **App lock** (Settings): PIN, optionally fingerprint/face; locks again after a minute in the background.
+  **TV mode:** on Android TV / Google TV / Fire TV the app uses the sidebar layout and shows a focus highlight for the remote.
 - **0.6.1:** Fixed 0.6.0 freezing and closing right after opening (a color in the new theme code referred to itself).
 - **0.6.0:** **Play (stream)** for videos and music: it starts in seconds while the rest downloads, and you can jump anywhere (in-app player on Android; on Windows it opens in VLC if installed, otherwise the browser).
   **View** photos in the app with pinch-zoom. Nothing stays on the device afterwards.

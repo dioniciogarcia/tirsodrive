@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/drive.dart';
 import '../core/strings.dart';
+import 'lock_screen.dart';
 import 'sync_screen.dart';
 import 'theme.dart';
 
@@ -83,6 +84,47 @@ class SettingsScreen extends StatelessWidget {
                     trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SyncScreen(drive: drive))),
                   ),
+                ),
+                SizedBox(height: 24),
+                SectionLabel(t('rules_title')),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: drive.ruleWifi,
+                  onChanged: (v) => drive.setRules(wifi: v),
+                  title: Text(t('rule_wifi'), style: TextStyle(fontSize: 14)),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: drive.ruleCharging,
+                  onChanged: (v) => drive.setRules(charging: v),
+                  title: Text(t('rule_charging'), style: TextStyle(fontSize: 14)),
+                ),
+                Row(children: [
+                  Expanded(child: Text(t('rule_quiet'), style: TextStyle(fontSize: 14))),
+                  DropdownButton<int>(
+                    value: drive.quietFrom,
+                    dropdownColor: C.surface2,
+                    items: [DropdownMenuItem(value: -1, child: Text(t('off'))), for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text('$h:00'))],
+                    onChanged: (v) => drive.setRules(from: v, to: v == -1 ? -1 : (drive.quietTo < 0 ? (v! + 9) % 24 : drive.quietTo)),
+                  ),
+                  if (drive.quietFrom >= 0) ...[
+                    Text('  →  '),
+                    DropdownButton<int>(
+                      value: drive.quietTo < 0 ? 0 : drive.quietTo,
+                      dropdownColor: C.surface2,
+                      items: [for (var h = 0; h < 24; h++) DropdownMenuItem(value: h, child: Text('$h:00'))],
+                      onChanged: (v) => drive.setRules(to: v),
+                    ),
+                  ],
+                ]),
+                SizedBox(height: 24),
+                SectionLabel(t('lock_title_set')),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: drive.lockEnabled,
+                  onChanged: (_) => lockSettingsDialog(context, drive),
+                  title: Text(t('lock_switch'), style: TextStyle(fontSize: 14)),
+                  subtitle: Text(drive.lockEnabled ? (drive.lockBio ? t('lock_on_bio') : t('lock_on')) : t('lock_off'), style: TextStyle(color: C.muted, fontSize: 12)),
                 ),
                 SizedBox(height: 24),
                 SectionLabel(t('set_account')),

@@ -228,6 +228,26 @@ class NativeBridge {
     });
   }
 
+  /// (on Wi-Fi?, charging?) — null when unknown (Windows counts as both).
+  static Future<(bool?, bool?)> deviceState() async {
+    if (!Platform.isAndroid) return (true, true);
+    try {
+      final m = await _ch.invokeMethod<Map<dynamic, dynamic>>('deviceState');
+      return (m?['wifi'] as bool?, m?['charging'] as bool?);
+    } catch (_) {
+      return (null, null);
+    }
+  }
+
+  static Future<bool> isTv() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _ch.invokeMethod<bool>('isTv') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> keepAwake(bool on) async {
     if (!Platform.isAndroid) return;
     try {

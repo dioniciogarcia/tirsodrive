@@ -11,6 +11,7 @@ import '../core/native.dart';
 import '../core/strings.dart';
 import 'channel_screen.dart';
 import 'library_screen.dart';
+import 'extras_screens.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'sync_screen.dart';
@@ -123,6 +124,10 @@ class _DesktopShellState extends State<DesktopShell> {
           SizedBox(height: 14),
           Divider(),
           SizedBox(height: 8),
+          _navItem('favorites', t('favorites'), C.amber),
+          _navItem('collections', t('collections'), C.accentSoft),
+          _navItem('duplicates', t('duplicates'), C.label),
+          _navItem('trash', t('trash'), C.red),
           _navItem('sync', t('sync_title'), C.green, trailing: d.sync.pairs.isEmpty ? null : '${d.sync.pairs.length}'),
           _navItem('transfers', t('nav_transfers'), C.accentSoft, trailing: active > 0 ? '$active' : null),
           _navItem('settings', t('nav_settings'), C.label),
@@ -245,6 +250,10 @@ class _DesktopShellState extends State<DesktopShell> {
   Widget _content() {
     if (_sel == 'search') return SearchScreen(drive: d, embedded: true);
     if (_sel == 'sync') return SyncScreen(drive: d, embedded: true);
+    if (_sel == 'favorites') return FileListScreen(drive: d, title: t('favorites'), files: () => d.allFiles.where((f) => f.fav).toList(), empty: t('favorites_empty'), embedded: true);
+    if (_sel == 'collections') return CollectionsScreen(drive: d, embedded: true);
+    if (_sel == 'duplicates') return DuplicatesScreen(drive: d, embedded: true);
+    if (_sel == 'trash') return TrashScreen(drive: d, embedded: true);
     if (_sel == 'transfers') return TransfersScreen(drive: d);
     if (_sel == 'settings') return SettingsScreen(drive: d);
     return ChannelScreen(key: ValueKey(_sel), drive: d, categoryKey: _selKey, chatId: _selChat, embedded: true);

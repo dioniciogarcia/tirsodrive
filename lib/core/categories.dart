@@ -96,6 +96,34 @@ const Map<String, List<String>> ambiguousExt = {
   'img': ['rom_ps1', 'other'],
 };
 
+const Map<String, String> _libretroSystems = {
+  'rom_nes': 'Nintendo - Nintendo Entertainment System',
+  'rom_snes': 'Nintendo - Super Nintendo Entertainment System',
+  'rom_gb': 'Nintendo - Game Boy',
+  'rom_gba': 'Nintendo - Game Boy Advance',
+  'rom_n64': 'Nintendo - Nintendo 64',
+  'rom_ds': 'Nintendo - Nintendo DS',
+  'rom_3ds': 'Nintendo - Nintendo 3DS',
+  'rom_gc': 'Nintendo - GameCube',
+  'rom_wii': 'Nintendo - Wii',
+  'rom_ps1': 'Sony - PlayStation',
+  'rom_ps2': 'Sony - PlayStation 2',
+  'rom_psp': 'Sony - PlayStation Portable',
+  'rom_genesis': 'Sega - Mega Drive - Genesis',
+};
+
+/// Box art from the libretro thumbnails project, matched by file name
+/// (works best with standard names such as "Pokemon - Emerald Version (USA, Europe).gba").
+String? boxArtUrl(String? categoryKey, String fileName) {
+  var system = _libretroSystems[categoryKey];
+  if (system == null) return null;
+  if (categoryKey == 'rom_gb' && extensionOf(fileName) == 'gbc') system = 'Nintendo - Game Boy Color';
+  final dot = fileName.lastIndexOf('.');
+  var title = dot > 0 ? fileName.substring(0, dot) : fileName;
+  title = title.replaceAll(RegExp(r'[&*/:`<>?\\|"]'), '_');
+  return 'https://thumbnails.libretro.com/${Uri.encodeComponent(system)}/Named_Boxarts/${Uri.encodeComponent(title)}.png';
+}
+
 String extensionOf(String name) {
   final i = name.lastIndexOf('.');
   if (i < 0 || i == name.length - 1) return '';
