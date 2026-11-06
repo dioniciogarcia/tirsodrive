@@ -133,6 +133,37 @@ class NativeBridge {
     } catch (_) {}
   }
 
+  /// Shows/updates the "TirsoDrive · Uploading…" notification that keeps transfers running in the background.
+  static Future<void> serviceUpdate({required String title, required String text, required int progress, required bool paused, required String button}) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _ch.invokeMethod('serviceUpdate', {'title': title, 'text': text, 'progress': progress, 'paused': paused, 'button': button});
+    } catch (_) {}
+  }
+
+  static Future<void> serviceStop() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _ch.invokeMethod('serviceStop');
+    } catch (_) {}
+  }
+
+  static Future<void> askNotifications() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _ch.invokeMethod('askNotifications');
+    } catch (_) {}
+  }
+
+  /// Calls [onTogglePause] when the notification's Pause/Resume button is tapped.
+  static void listen({required void Function() onTogglePause}) {
+    if (!Platform.isAndroid) return;
+    _ch.setMethodCallHandler((call) async {
+      if (call.method == 'togglePause') onTogglePause();
+      return null;
+    });
+  }
+
   static Future<void> keepAwake(bool on) async {
     if (!Platform.isAndroid) return;
     try {

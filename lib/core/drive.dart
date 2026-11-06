@@ -1,5 +1,6 @@
 // The heart of TirsoDrive: sign-in, channels, files and the transfer queue.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' hide Category;
@@ -14,7 +15,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.1.3';
+const String appVersion = '0.2.0';
 
 class DriveChannel {
   final int chatId;
@@ -170,6 +171,8 @@ class Drive extends ChangeNotifier {
       apiHash = _prefs.getString('apiHash') ?? '';
     }
     td.updates.listen(_onUpdate);
+    NativeBridge.listen(onTogglePause: togglePause);
+    NativeBridge.serviceStop(); // clear any leftover notification from a previous run
     if (apiId == 0 || apiHash.isEmpty) {
       step = AuthStep.needApi;
       notifyListeners();
@@ -417,6 +420,7 @@ class Drive extends ChangeNotifier {
       myPhone = (me['phone_number'] ?? '').toString();
     } catch (_) {}
     await loadChannels();
+    await _restoreQueue();
   }
 
   Future<void> loadChannels() async {
@@ -661,6 +665,10 @@ class Drive extends ChangeNotifier {
     }
     _batchTotal += items.length;
     transfers.addAll(items);
+    if (!_askedNotifications) {
+      _askedNotifications = true;
+      NativeBridge.askNotifications();
+    }
     _say(t('queued_msg', {'n': items.length}));
     notifyListeners();
     _pump();
@@ -726,7 +734,6 @@ class Drive extends ChangeNotifier {
   // ---------------------------------------------------------------- queue engine
 
   void _pump() {
-    _updateKeepAwake();
     if (paused || step != AuthStep.ready) return;
     if (!_upBusy) {
       final next = transfers.where((x) => x.upload && x.status == TStatus.queued);
@@ -738,8 +745,123 @@ class Drive extends ChangeNotifier {
     }
   }
 
-  void _updateKeepAwake() {
-    NativeBridge.keepAwake(transfers.any((x) => x.running));
+  // ---------------------------------------------------------------- background + remembered queue
+
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    _bgTimer ??= Timer(const Duration(milliseconds: 900), () {
+      _bgTimer = null;
+      _syncBackground();
+    });
+  }
+
+  Timer? _bgTimer;
+  bool _serviceOn = false;
+  bool _askedNotifications = false;
+  String _lastSaved = '';
+
+  void _syncBackground() {
+    // 1. Notification + background service (Android)
+    final pending = transfers.where((x) => !x.finished).toList();
+    if (pending.isEmpty || step != AuthStep.ready) {
+      if (_serviceOn) {
+        _serviceOn = false;
+        NativeBridge.serviceStop();
+      }
+    } else {
+      final cur = pending.where((x) => x.running).toList();
+      final tr = cur.isNotEmpty ? cur.first : null;
+      String title;
+      String text;
+      var progress = -1;
+      if (paused) {
+        title = t('tr_paused');
+        text = t('notif_waiting', {'n': pending.length});
+      } else if (tr == null) {
+        title = 'TirsoDrive';
+        text = t('notif_waiting', {'n': pending.length});
+      } else {
+        title = tr.upload
+            ? t('tr_uploading', {'i': (uploadsDone + 1).clamp(1, uploadsTotal < 1 ? 1 : uploadsTotal), 'n': uploadsTotal < 1 ? 1 : uploadsTotal})
+            : t('tr_downloading');
+        final finishing = tr.upload && tr.size > 0 && tr.bytes >= tr.size;
+        if (tr.status == TStatus.active && !finishing) progress = (tr.fraction * 100).round();
+        text = '${tr.name} · ${finishing ? t('tr_finishing') : (tr.status == TStatus.active ? '$progress%' : t('tr_preparing'))}';
+      }
+      _serviceOn = true;
+      NativeBridge.serviceUpdate(
+        title: title,
+        text: text,
+        progress: progress,
+        paused: paused,
+        button: paused ? t('tr_resume') : t('notif_pause'),
+      );
+    }
+    // 2. Remember unfinished uploads so they continue after the app or phone restarts
+    final list = transfers
+        .where((x) => x.upload && !x.finished)
+        .map((x) => {
+              'name': x.name,
+              'size': x.size,
+              'uri': x.uri,
+              'path': x.sourcePath,
+              'mtime': x.modifiedMs,
+              'key': x.destKey,
+              'chat': x.destChatId,
+              'tmpChat': x.chatId,
+              'tmpMsg': x.tempMessageId,
+            })
+        .toList();
+    final json = jsonEncode(list);
+    if (json != _lastSaved && step == AuthStep.ready) {
+      _lastSaved = json;
+      _prefs.setString('queue_v1', json);
+    }
+  }
+
+  Future<void> _restoreQueue() async {
+    final raw = _prefs.getString('queue_v1');
+    if (raw == null || raw == '[]' || transfers.isNotEmpty) return;
+    List<dynamic> list;
+    try {
+      list = jsonDecode(raw) as List<dynamic>;
+    } catch (_) {
+      return;
+    }
+    final items = <Transfer>[];
+    for (final e in list) {
+      final m = e as Map<String, dynamic>;
+      // An upload that was half-sent when the app closed: cancel Telegram's leftover copy, then send it again.
+      final tmpChat = (m['tmpChat'] as num?)?.toInt();
+      final tmpMsg = (m['tmpMsg'] as num?)?.toInt();
+      if (tmpChat != null && tmpMsg != null) {
+        try {
+          final msg = await td.call({'@type': 'getMessage', 'chat_id': tmpChat, 'message_id': tmpMsg});
+          if (msg['sending_state'] != null) {
+            await td.call({'@type': 'deleteMessages', 'chat_id': tmpChat, 'message_ids': [tmpMsg], 'revoke': true});
+          } else {
+            continue; // it actually finished sending — nothing to redo
+          }
+        } catch (_) {}
+      }
+      items.add(Transfer.upload(
+        name: (m['name'] ?? 'file') as String,
+        size: (m['size'] as num?)?.toInt() ?? 0,
+        uri: m['uri'] as String?,
+        sourcePath: m['path'] as String?,
+        modifiedMs: (m['mtime'] as num?)?.toInt(),
+        destKey: m['key'] as String?,
+        destChatId: (m['chat'] as num?)?.toInt(),
+      ));
+    }
+    if (items.isEmpty) return;
+    _batchTotal = items.length;
+    _batchDone = 0;
+    transfers.addAll(items);
+    _say(t('resumed', {'n': items.length}));
+    notifyListeners();
+    _pump();
   }
 
   Future<void> _runUpload(Transfer tr) async {

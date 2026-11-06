@@ -1,16 +1,16 @@
-# TirsoDrive 0.1.3 — Phase 1 (Android)
+# TirsoDrive — Android 0.2.0 / Windows 0.1.3
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
 
 ## Step 1 — Install the APK
 
-1. Copy `TirsoDrive-0.1.3.apk` to the phone (USB cable, Google Drive, or Quick Share).
+1. Copy `TirsoDrive-0.2.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
 2. Tap the file. If Android asks, allow **Install unknown apps** for the app you opened it with.
 3. Tap **Install**. If an older TirsoDrive is installed, this updates it and you stay signed in.
 
 For a TV (Google TV Streamer, TCL, Fire TV), use the same APK. You can sideload it with
-"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.1.3.apk`
+"Send Files to TV", "Downloader", or ADB: `adb install -r TirsoDrive-0.2.0.apk`
 
 ## Step 2 — Sign in
 
@@ -54,8 +54,8 @@ On Windows:
 
 ## Known limits in this phase
 
-- Keep the app open while it uploads. Uploads that continue after you close the app come in a later phase.
-- If you close the app, the transfer queue is not remembered yet.
+- Android uploads keep going with the screen locked or in other apps (follow them in the notification).
+  If you swipe TirsoDrive away from recent apps, uploads stop and resume the next time you open it.
 - Sync, global search, sharing, the T: drive and the rest come in the next phases (see HANDOFF.md).
 
 ## Keep private
@@ -67,6 +67,7 @@ On Windows:
 
 ## Changes
 
+- **0.2.0 (Android):** Background uploads with a progress notification (Pause/Resume). Unfinished uploads are remembered and resume after the app or phone restarts. The first upload asks permission to show notifications: tap Allow.
 - **0.1.3:** Fixed uploads staying at 100% when a file went to a different channel than an earlier upload. The upload counter now counts only the current batch, and the end of each upload shows "Finishing…".
 - **0.1.2:** API ID and hash built in; the setup screen is gone.
 - **0.1.1:** Fixed uploads failing with "InputFile is not specified".

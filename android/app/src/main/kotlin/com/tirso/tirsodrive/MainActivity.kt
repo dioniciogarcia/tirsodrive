@@ -1,6 +1,8 @@
 package com.tirso.tirsodrive
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
@@ -35,8 +37,37 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
+        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+        TransferService.onTogglePause = { main.post { channel.invokeMethod("togglePause", null) } }
+        channel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "serviceUpdate" -> {
+                    try {
+                        val i = Intent(this, TransferService::class.java).setAction(TransferService.ACTION_UPDATE)
+                        i.putExtra("title", call.argument<String>("title"))
+                        i.putExtra("text", call.argument<String>("text"))
+                        i.putExtra("progress", call.argument<Int>("progress") ?: -1)
+                        i.putExtra("paused", call.argument<Boolean>("paused") ?: false)
+                        i.putExtra("button", call.argument<String>("button"))
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("service", e.message, null)
+                    }
+                }
+                "serviceStop" -> {
+                    if (TransferService.running) {
+                        try { startService(Intent(this, TransferService::class.java).setAction(TransferService.ACTION_STOP)) } catch (_: Exception) { }
+                    }
+                    result.success(true)
+                }
+                "askNotifications" -> {
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4712)
+                    }
+                    result.success(true)
+                }
                 "pickFiles" -> pickFiles(result)
                 "copyToCache" -> background(result) {
                     copyToCache(call.argument<String>("uri")!!, call.argument<String>("name")!!)
