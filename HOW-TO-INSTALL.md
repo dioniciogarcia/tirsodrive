@@ -1,4 +1,4 @@
-# TirsoDrive — Android 0.8.0 / Windows 0.1.3
+# TirsoDrive — Android 0.8.0 / Windows 0.8.0
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
@@ -38,7 +38,7 @@ Each person signs in with their own Telegram account and only sees their own fil
 
 ## Windows
 
-1. Double-click **TirsoDrive-Setup-0.1.3.exe**. Admin rights aren't needed.
+1. Double-click **TirsoDrive-Setup-0.8.0.exe**. Admin rights aren't needed.
 2. Windows may show **"Windows protected your PC"**, because the installer isn't signed with a paid certificate.
    Click **More info → Run anyway**.
 3. Choose a language, tick "Create a desktop shortcut" if you want one, and install.
@@ -50,7 +50,7 @@ On Windows:
 - **Drop a folder**, or click **Back up a folder**: every file inside it, including subfolders, is sorted into the right channels,
   and you review the list before anything uploads.
 - Saved files go to **Downloads\TirsoDrive**.
-- **TirsoDrive-0.1.3-portable.zip** is the same app without installing: unzip it anywhere and run TirsoDrive.exe.
+- **TirsoDrive-0.8.0-portable.zip** is the same app without installing: unzip it anywhere and run TirsoDrive.exe.
 
 ## Known limits in this phase
 

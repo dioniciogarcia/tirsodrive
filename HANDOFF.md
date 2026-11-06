@@ -65,4 +65,4 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
 - Android 0.2.0: a foreground service (TransferService.kt, dataSync) keeps transfers running in the background, with a notification and Pause/Resume.
   Unfinished uploads are saved in prefs 'queue_v1' and restored after login; a half-sent message is deleted and re-sent. Swiping the app away stops it (resumes on next open).
 - TV not tested yet by the user.
-- Windows 0.1.3 (portable) delivered; the user is testing it with GBA ROM uploads.
+- Windows 0.8.0 installer + portable delivered (GitHub run 42311045096). Windows CMakeLists defines _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS for local_auth_windows (newest MSVC on the runners refuses /await otherwise).
