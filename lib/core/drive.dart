@@ -1,0 +1,942 @@
+// The heart of TirsoDrive: sign-in, channels, files and the transfer queue.
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' hide Category;
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../td/td_client.dart';
+import 'categories.dart';
+import 'native.dart';
+import 'strings.dart';
+
+/// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
+const int builtInApiId = 38798734;
+const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
+const String appVersion = '0.1.3';
+
+class DriveChannel {
+  final int chatId;
+  String title;
+  DriveChannel(this.chatId, this.title);
+  Category? get category => categoryByTitle(title);
+  String get display {
+    final c = category;
+    if (c != null) return c.label(appLang);
+    return title.startsWith(channelPrefix) ? title.substring(channelPrefix.length) : title;
+  }
+}
+
+class DriveFile {
+  final int chatId;
+  final int messageId;
+  final String name;
+  final int size;
+  final int date;
+  final String mime;
+  final int fileId;
+  final int? originalMs;
+  DriveFile({
+    required this.chatId,
+    required this.messageId,
+    required this.name,
+    required this.size,
+    required this.date,
+    required this.mime,
+    required this.fileId,
+    this.originalMs,
+  });
+  String get ext => extensionOf(name).toUpperCase();
+}
+
+enum TStatus { queued, preparing, creating, waiting, active, done, failed, cancelled }
+
+class Transfer {
+  static int _ids = 0;
+  final int id = ++_ids;
+  final bool upload;
+  final String name;
+  final int size;
+  // upload source
+  final String? uri;
+  final String? sourcePath;
+  final int? modifiedMs;
+  // upload destination
+  String? destKey;
+  int? destChatId;
+  // download
+  final DriveFile? file;
+  final String? action; // 'open' or 'save'
+
+  TStatus status = TStatus.queued;
+  int bytes = 0;
+  int waitSeconds = 0;
+  String? error;
+  int? chatId;
+  int? tempMessageId;
+  int? fileId;
+  String? tempPath;
+  double speed = 0;
+  int _lastBytes = 0;
+  DateTime _lastTime = DateTime.now();
+  Completer<void>? _done;
+
+  Transfer.upload({required this.name, required this.size, this.uri, this.sourcePath, this.modifiedMs, this.destKey, this.destChatId})
+      : upload = true,
+        file = null,
+        action = null;
+
+  Transfer.download(DriveFile f, this.action)
+      : upload = false,
+        name = f.name,
+        size = f.size,
+        uri = null,
+        sourcePath = null,
+        modifiedMs = null,
+        file = f;
+
+  double get fraction => size <= 0 ? 0 : (bytes / size).clamp(0.0, 1.0);
+  bool get finished => status == TStatus.done || status == TStatus.failed || status == TStatus.cancelled;
+  bool get running => !finished && status != TStatus.queued;
+
+  void _progress(int b) {
+    final now = DateTime.now();
+    final dt = now.difference(_lastTime).inMilliseconds;
+    if (dt >= 700) {
+      final inst = (b - _lastBytes) * 1000 / dt;
+      speed = speed == 0 ? inst : speed * 0.6 + inst * 0.4;
+      _lastBytes = b;
+      _lastTime = now;
+    }
+    bytes = b;
+  }
+
+  int? get secondsLeft => speed <= 1 ? null : ((size - bytes) / speed).round();
+}
+
+enum AuthStep { starting, needApi, params, phone, qr, code, password, email, emailCode, registration, unsupported, ready, closing }
+
+class Drive extends ChangeNotifier {
+  final TdClient td = TdClient();
+  late SharedPreferences _prefs;
+
+  // settings
+  String lang = 'en';
+  int maxBytes = 2000 * 1024 * 1024; // Telegram's free limit (≈2 GB)
+  int apiId = builtInApiId;
+  String apiHash = builtInApiHash;
+
+  // auth
+  AuthStep step = AuthStep.starting;
+  String? qrLink;
+  String codeTarget = '';
+  String codeKind = '';
+  String passwordHint = '';
+  String emailPattern = '';
+  String? authError;
+  bool authBusy = false;
+  bool wantQr = false;
+
+  // account
+  String myName = '';
+  String myPhone = '';
+  String connection = 'connectionStateConnecting';
+
+  // chats & channels
+  final Map<int, Map<String, dynamic>> _chats = {};
+  final Map<int, Map<String, dynamic>> _supergroups = {};
+  bool channelsLoaded = false;
+  final Map<int, List<DriveFile>> filesByChat = {};
+  final Set<int> loadingChats = {};
+
+  // transfers
+  final List<Transfer> transfers = [];
+  bool paused = false;
+  bool _upBusy = false;
+  bool _downBusy = false;
+  final Map<int, Transfer> _byFileId = {};
+  final StreamController<String> _messages = StreamController.broadcast();
+  Stream<String> get messages => _messages.stream;
+
+  Future<void> init() async {
+    _prefs = await SharedPreferences.getInstance();
+    final sys = PlatformDispatcher.instance.locale.languageCode;
+    lang = _prefs.getString('lang') ?? (sys == 'es' ? 'es' : 'en');
+    appLang = lang;
+    maxBytes = _prefs.getInt('maxBytes') ?? maxBytes;
+    if (builtInApiId == 0) {
+      apiId = _prefs.getInt('apiId') ?? 0;
+      apiHash = _prefs.getString('apiHash') ?? '';
+    }
+    td.updates.listen(_onUpdate);
+    if (apiId == 0 || apiHash.isEmpty) {
+      step = AuthStep.needApi;
+      notifyListeners();
+      return;
+    }
+    await td.start();
+  }
+
+  bool get usesBuiltInApi => builtInApiId != 0;
+
+  Future<void> saveApi(int id, String hash) async {
+    apiId = id;
+    apiHash = hash;
+    await _prefs.setInt('apiId', id);
+    await _prefs.setString('apiHash', hash);
+    step = AuthStep.starting;
+    notifyListeners();
+    await td.start();
+  }
+
+  void setLang(String l) {
+    lang = l;
+    appLang = l;
+    _prefs.setString('lang', l);
+    notifyListeners();
+  }
+
+  void setMaxBytes(int b) {
+    maxBytes = b;
+    _prefs.setInt('maxBytes', b);
+    notifyListeners();
+  }
+
+  void _say(String s) => _messages.add(s);
+
+  // ---------------------------------------------------------------- updates
+
+  void _onUpdate(Map<String, dynamic> u) {
+    switch (u['@type']) {
+      case 'updateAuthorizationState':
+        _onAuth(u['authorization_state'] as Map<String, dynamic>);
+        break;
+      case 'updateConnectionState':
+        connection = (u['state']?['@type'] ?? '') as String;
+        notifyListeners();
+        break;
+      case 'updateNewChat':
+        final c = u['chat'] as Map<String, dynamic>;
+        _chats[(c['id'] as num).toInt()] = c;
+        if (channelsLoaded) notifyListeners();
+        break;
+      case 'updateChatTitle':
+        final id = (u['chat_id'] as num).toInt();
+        _chats[id]?['title'] = u['title'];
+        if (channelsLoaded) notifyListeners();
+        break;
+      case 'updateSupergroup':
+        final s = u['supergroup'] as Map<String, dynamic>;
+        _supergroups[(s['id'] as num).toInt()] = s;
+        break;
+      case 'updateFile':
+        _onFile(u['file'] as Map<String, dynamic>);
+        break;
+      case 'updateMessageSendSucceeded':
+        _onSent(u['message'] as Map<String, dynamic>, (u['old_message_id'] as num).toInt());
+        break;
+      case 'updateMessageSendFailed':
+        _onSendFailed(u['message'] as Map<String, dynamic>, (u['old_message_id'] as num).toInt(), (u['error']?['message'] ?? u['error_message'] ?? 'failed').toString());
+        break;
+      case 'updateNewMessage':
+        final m = u['message'] as Map<String, dynamic>;
+        if (m['sending_state'] == null) _addMessage(m);
+        break;
+      case 'updateDeleteMessages':
+        if (u['is_permanent'] == true) {
+          final chatId = (u['chat_id'] as num).toInt();
+          final ids = (u['message_ids'] as List).map((e) => (e as num).toInt()).toSet();
+          filesByChat[chatId]?.removeWhere((f) => ids.contains(f.messageId));
+          notifyListeners();
+        }
+        break;
+    }
+  }
+
+  // ---------------------------------------------------------------- sign-in
+
+  Future<void> _onAuth(Map<String, dynamic> s) async {
+    authBusy = false;
+    switch (s['@type']) {
+      case 'authorizationStateWaitTdlibParameters':
+        step = AuthStep.params;
+        final base = await getApplicationSupportDirectory();
+        try {
+          await td.call({
+            '@type': 'setTdlibParameters',
+            'use_test_dc': false,
+            'database_directory': '${base.path}/td_db',
+            'files_directory': '${base.path}/td_files',
+            'database_encryption_key': '',
+            'use_file_database': true,
+            'use_chat_info_database': true,
+            'use_message_database': true,
+            'use_secret_chats': false,
+            'api_id': apiId,
+            'api_hash': apiHash,
+            'system_language_code': lang,
+            'device_model': Platform.isAndroid ? 'TirsoDrive (Android)' : 'TirsoDrive (PC)',
+            'system_version': Platform.operatingSystemVersion.split(' ').first,
+            'application_version': appVersion,
+          });
+        } on TdError catch (e) {
+          authError = t('err_generic', {'e': e.message});
+        }
+        break;
+      case 'authorizationStateWaitPhoneNumber':
+        qrLink = null;
+        step = AuthStep.phone;
+        if (wantQr) requestQr();
+        break;
+      case 'authorizationStateWaitOtherDeviceConfirmation':
+        qrLink = s['link'] as String?;
+        step = AuthStep.qr;
+        break;
+      case 'authorizationStateWaitCode':
+        final info = s['code_info'] as Map<String, dynamic>? ?? {};
+        codeTarget = (info['phone_number'] ?? '').toString();
+        codeKind = (info['type']?['@type'] ?? '').toString();
+        step = AuthStep.code;
+        break;
+      case 'authorizationStateWaitPassword':
+        passwordHint = (s['password_hint'] ?? '').toString();
+        step = AuthStep.password;
+        break;
+      case 'authorizationStateWaitEmailAddress':
+        step = AuthStep.email;
+        break;
+      case 'authorizationStateWaitEmailCode':
+        emailPattern = (s['code_info']?['email_address_pattern'] ?? '').toString();
+        step = AuthStep.emailCode;
+        break;
+      case 'authorizationStateWaitRegistration':
+        step = AuthStep.registration;
+        break;
+      case 'authorizationStateReady':
+        step = AuthStep.ready;
+        authError = null;
+        _afterLogin();
+        break;
+      case 'authorizationStateLoggingOut':
+      case 'authorizationStateClosing':
+        step = AuthStep.closing;
+        break;
+      case 'authorizationStateClosed':
+        step = AuthStep.starting;
+        _chats.clear();
+        _supergroups.clear();
+        filesByChat.clear();
+        channelsLoaded = false;
+        if (apiId == 0 || apiHash.isEmpty) {
+          step = AuthStep.needApi;
+        } else {
+          td.newClient();
+        }
+        break;
+      default:
+        step = AuthStep.unsupported;
+    }
+    notifyListeners();
+  }
+
+  String _authMessage(TdError e) {
+    final m = e.message.toUpperCase();
+    if (e.retryAfter != null) return t('err_flood', {'s': e.retryAfter});
+    if (m.contains('PHONE_NUMBER')) return t('err_phone');
+    if (m.contains('CODE_EXPIRED')) return t('err_code_expired');
+    if (m.contains('CODE_INVALID') || m.contains('CODE_EMPTY')) return t('err_code');
+    if (m.contains('PASSWORD')) return t('err_password');
+    if (m.contains('API_ID')) return t('err_api');
+    return t('err_generic', {'e': e.message});
+  }
+
+  Future<void> _authCall(Map<String, dynamic> req) async {
+    authError = null;
+    authBusy = true;
+    notifyListeners();
+    try {
+      await td.call(req);
+    } on TdError catch (e) {
+      authError = _authMessage(e);
+      authBusy = false;
+      notifyListeners();
+    }
+  }
+
+  void requestQr() {
+    wantQr = true;
+    if (step == AuthStep.phone) {
+      _authCall({'@type': 'requestQrCodeAuthentication', 'other_user_ids': <int>[]});
+    }
+  }
+
+  void submitPhone(String phone) {
+    wantQr = false;
+    final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    _authCall({'@type': 'setAuthenticationPhoneNumber', 'phone_number': clean});
+  }
+
+  void submitCode(String code) => _authCall({'@type': 'checkAuthenticationCode', 'code': code.trim()});
+  void resendCode() => _authCall({'@type': 'resendAuthenticationCode', 'reason': {'@type': 'resendCodeReasonUserRequest'}});
+  void submitPassword(String pw) => _authCall({'@type': 'checkAuthenticationPassword', 'password': pw});
+  void submitEmail(String e) => _authCall({'@type': 'setAuthenticationEmailAddress', 'email_address': e.trim()});
+  void submitEmailCode(String c) => _authCall({
+        '@type': 'checkAuthenticationEmailCode',
+        'code': {'@type': 'emailAddressAuthenticationCode', 'code': c.trim()}
+      });
+
+  /// Goes back to the first sign-in screen (closes this TDLib instance and opens a fresh one).
+  void startOver({bool qr = false}) {
+    wantQr = qr;
+    authError = null;
+    td.send({'@type': 'close'});
+  }
+
+  Future<void> logOut() async {
+    wantQr = false;
+    try {
+      await td.call({'@type': 'logOut'});
+    } catch (_) {}
+  }
+
+  Future<void> changeApi() async {
+    await _prefs.remove('apiId');
+    await _prefs.remove('apiHash');
+    apiId = 0;
+    apiHash = '';
+    await logOut();
+  }
+
+  // ---------------------------------------------------------------- channels
+
+  Future<void> _afterLogin() async {
+    try {
+      final me = await td.call({'@type': 'getMe'});
+      myName = [me['first_name'], me['last_name']].where((e) => e != null && '$e'.isNotEmpty).join(' ');
+      myPhone = (me['phone_number'] ?? '').toString();
+    } catch (_) {}
+    await loadChannels();
+  }
+
+  Future<void> loadChannels() async {
+    for (final list in [
+      {'@type': 'chatListMain'},
+      {'@type': 'chatListArchive'}
+    ]) {
+      for (var i = 0; i < 100; i++) {
+        try {
+          await td.call({'@type': 'loadChats', 'chat_list': list, 'limit': 200});
+        } on TdError catch (e) {
+          if (e.code != 404) debugPrint('loadChats: ${e.message}');
+          break;
+        }
+      }
+    }
+    channelsLoaded = true;
+    notifyListeners();
+  }
+
+  bool _isMyChannel(Map<String, dynamic> chat) {
+    final type = chat['type'] as Map<String, dynamic>? ?? {};
+    if (type['@type'] != 'chatTypeSupergroup' || type['is_channel'] != true) return false;
+    final title = (chat['title'] ?? '').toString();
+    if (!title.startsWith(channelPrefix)) return false;
+    final sg = _supergroups[(type['supergroup_id'] as num?)?.toInt() ?? 0];
+    if (sg == null) return true;
+    return sg['status']?['@type'] == 'chatMemberStatusCreator';
+  }
+
+  List<DriveChannel> get channels {
+    final out = <DriveChannel>[];
+    _chats.forEach((id, c) {
+      if (_isMyChannel(c)) out.add(DriveChannel(id, (c['title'] ?? '').toString()));
+    });
+    out.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return out;
+  }
+
+  List<DriveChannel> get customChannels => channels.where((c) => c.category == null).toList();
+
+  DriveChannel? channelForKey(String key) {
+    final cat = categoryByKey(key);
+    if (cat == null) return null;
+    for (final c in channels) {
+      if (c.title.toLowerCase() == cat.channelTitle.toLowerCase()) return c;
+    }
+    return null;
+  }
+
+  DriveChannel? channelById(int chatId) {
+    final c = _chats[chatId];
+    if (c == null || !_isMyChannel(c)) return null;
+    return DriveChannel(chatId, (c['title'] ?? '').toString());
+  }
+
+  Future<int> _createChannel(String title, {Transfer? forTransfer}) async {
+    while (true) {
+      try {
+        final chat = await td.call({
+          '@type': 'createNewSupergroupChat',
+          'title': title,
+          'is_forum': false,
+          'is_channel': true,
+          'description': 'TirsoDrive storage channel. Files here are managed by the TirsoDrive app.',
+          'message_auto_delete_time': 0,
+          'for_import': false,
+        });
+        final id = (chat['id'] as num).toInt();
+        _chats[id] = chat;
+        // Keep Telegram's main chat list tidy: TirsoDrive channels live in the Archive.
+        try {
+          await td.call({'@type': 'addChatToList', 'chat_id': id, 'chat_list': {'@type': 'chatListArchive'}});
+        } catch (_) {}
+        notifyListeners();
+        return id;
+      } on TdError catch (e) {
+        final wait = e.retryAfter;
+        if (wait == null || wait > 3600) rethrow;
+        if (forTransfer != null) {
+          forTransfer.status = TStatus.waiting;
+          forTransfer.waitSeconds = wait;
+          notifyListeners();
+        }
+        await Future.delayed(Duration(seconds: wait + 1));
+      }
+    }
+  }
+
+  Future<int> ensureChannel(String key, {Transfer? forTransfer}) async {
+    final existing = channelForKey(key);
+    if (existing != null) return existing.chatId;
+    return _createChannel(categoryByKey(key)!.channelTitle, forTransfer: forTransfer);
+  }
+
+  Future<String?> createCustomChannel(String name) async {
+    final clean = name.trim();
+    if (clean.isEmpty) return null;
+    final title = '$channelPrefix$clean';
+    if (channels.any((c) => c.title.toLowerCase() == title.toLowerCase())) return t('new_channel_exists');
+    try {
+      await _createChannel(title);
+      return null;
+    } on TdError catch (e) {
+      return e.retryAfter != null ? t('err_flood', {'s': e.retryAfter}) : t('err_generic', {'e': e.message});
+    }
+  }
+
+  // ---------------------------------------------------------------- files
+
+  DriveFile? _fileFromMessage(Map<String, dynamic> m) {
+    final c = m['content'] as Map<String, dynamic>? ?? {};
+    final id = (m['id'] as num).toInt();
+    Map<String, dynamic>? file;
+    String name = '';
+    String mime = '';
+    switch (c['@type']) {
+      case 'messageDocument':
+        final d = c['document'] as Map<String, dynamic>;
+        file = d['document'] as Map<String, dynamic>?;
+        name = (d['file_name'] ?? '').toString();
+        mime = (d['mime_type'] ?? '').toString();
+        break;
+      case 'messageVideo':
+        final v = c['video'] as Map<String, dynamic>;
+        file = v['video'] as Map<String, dynamic>?;
+        name = (v['file_name'] ?? '').toString();
+        mime = (v['mime_type'] ?? 'video/mp4').toString();
+        if (name.isEmpty) name = 'video_$id.mp4';
+        break;
+      case 'messageAudio':
+        final a = c['audio'] as Map<String, dynamic>;
+        file = a['audio'] as Map<String, dynamic>?;
+        name = (a['file_name'] ?? '').toString();
+        mime = (a['mime_type'] ?? '').toString();
+        break;
+      case 'messageAnimation':
+        final a = c['animation'] as Map<String, dynamic>;
+        file = a['animation'] as Map<String, dynamic>?;
+        name = (a['file_name'] ?? '').toString();
+        mime = (a['mime_type'] ?? '').toString();
+        break;
+      case 'messagePhoto':
+        final sizes = (c['photo']?['sizes'] as List?) ?? [];
+        if (sizes.isNotEmpty) file = (sizes.last as Map<String, dynamic>)['photo'] as Map<String, dynamic>?;
+        name = 'photo_$id.jpg';
+        mime = 'image/jpeg';
+        break;
+      default:
+        return null;
+    }
+    if (file == null) return null;
+    if (name.isEmpty) name = 'file_$id';
+    final caption = (c['caption']?['text'] ?? '').toString();
+    final mt = RegExp(r'mtime=(\d+)').firstMatch(caption);
+    final size = (file['size'] as num?)?.toInt() ?? 0;
+    return DriveFile(
+      chatId: (m['chat_id'] as num).toInt(),
+      messageId: id,
+      name: name,
+      size: size > 0 ? size : ((file['expected_size'] as num?)?.toInt() ?? 0),
+      date: (m['date'] as num?)?.toInt() ?? 0,
+      mime: mime.isEmpty ? mimeFor(name) : mime,
+      fileId: (file['id'] as num).toInt(),
+      originalMs: mt == null ? null : int.tryParse(mt.group(1)!),
+    );
+  }
+
+  void _addMessage(Map<String, dynamic> m) {
+    final chatId = (m['chat_id'] as num).toInt();
+    final list = filesByChat[chatId];
+    if (list == null) return; // not opened yet; it will load fresh
+    final f = _fileFromMessage(m);
+    if (f == null || list.any((x) => x.messageId == f.messageId)) return;
+    list.insert(0, f);
+    notifyListeners();
+  }
+
+  Future<void> loadFiles(int chatId, {bool refresh = false}) async {
+    if (loadingChats.contains(chatId)) return;
+    if (!refresh && filesByChat.containsKey(chatId)) return;
+    loadingChats.add(chatId);
+    notifyListeners();
+    final out = <DriveFile>[];
+    try {
+      var from = 0;
+      var emptyRounds = 0;
+      for (var i = 0; i < 300; i++) {
+        final res = await td.call({
+          '@type': 'getChatHistory',
+          'chat_id': chatId,
+          'from_message_id': from,
+          'offset': 0,
+          'limit': 100,
+          'only_local': false,
+        });
+        final msgs = (res['messages'] as List?) ?? [];
+        if (msgs.isEmpty) {
+          if (++emptyRounds >= 2 || from == 0) break;
+          continue;
+        }
+        emptyRounds = 0;
+        for (final m in msgs) {
+          final f = _fileFromMessage(m as Map<String, dynamic>);
+          if (f != null && !out.any((x) => x.messageId == f.messageId)) out.add(f);
+        }
+        from = ((msgs.last as Map)['id'] as num).toInt();
+      }
+    } catch (e) {
+      debugPrint('loadFiles: $e');
+    }
+    filesByChat[chatId] = out;
+    loadingChats.remove(chatId);
+    notifyListeners();
+  }
+
+  Future<void> deleteFile(DriveFile f) async {
+    try {
+      await td.call({'@type': 'deleteMessages', 'chat_id': f.chatId, 'message_ids': [f.messageId], 'revoke': true});
+      try {
+        await td.call({'@type': 'deleteFile', 'file_id': f.fileId});
+      } catch (_) {}
+      filesByChat[f.chatId]?.removeWhere((x) => x.messageId == f.messageId);
+      notifyListeners();
+      _say(t('deleted'));
+    } on TdError catch (e) {
+      _say(t('err_generic', {'e': e.message}));
+    }
+  }
+
+  String channelName(int chatId) => channelById(chatId)?.display ?? (_chats[chatId]?['title'] ?? '').toString();
+
+  // ---------------------------------------------------------------- picking
+
+  Future<List<PickedFile>> pick() => NativeBridge.pickFiles();
+  Future<List<PickedFile>> pickFolder() => NativeBridge.pickFolder();
+
+  void enqueueUploads(List<Transfer> items) {
+    if (!transfers.any((x) => x.upload && !x.finished)) {
+      _batchTotal = 0;
+      _batchDone = 0;
+    }
+    _batchTotal += items.length;
+    transfers.addAll(items);
+    _say(t('queued_msg', {'n': items.length}));
+    notifyListeners();
+    _pump();
+  }
+
+  void download(DriveFile f, String action) {
+    final existing = transfers.where((x) => !x.upload && !x.finished && x.file?.fileId == f.fileId);
+    if (existing.isNotEmpty) return;
+    transfers.add(Transfer.download(f, action));
+    notifyListeners();
+    _pump();
+  }
+
+  void togglePause() {
+    paused = !paused;
+    notifyListeners();
+    _pump();
+  }
+
+  void retry(Transfer tr) {
+    if (tr.upload) {
+      if (!transfers.any((x) => x.upload && !x.finished)) {
+        _batchTotal = 0;
+        _batchDone = 0;
+      }
+      _batchTotal++;
+      tr.tempMessageId = null;
+      tr.chatId = null;
+      tr.fileId = null;
+    }
+    tr.status = TStatus.queued;
+    tr.error = null;
+    tr.bytes = 0;
+    tr.speed = 0;
+    notifyListeners();
+    _pump();
+  }
+
+  void clearFinished() {
+    transfers.removeWhere((x) => x.finished);
+    notifyListeners();
+  }
+
+  Future<void> cancel(Transfer tr) async {
+    if (tr.finished) return;
+    final wasRunning = tr.running;
+    if (tr.upload && !wasRunning) _batchDone++; // a queued one never runs, so count it here
+    tr.status = TStatus.cancelled;
+    if (tr.upload && tr.tempMessageId != null && tr.chatId != null) {
+      try {
+        await td.call({'@type': 'deleteMessages', 'chat_id': tr.chatId, 'message_ids': [tr.tempMessageId], 'revoke': true});
+      } catch (_) {}
+    }
+    if (!tr.upload && tr.fileId != null) {
+      try {
+        await td.call({'@type': 'cancelDownloadFile', 'file_id': tr.fileId, 'only_if_pending': false});
+      } catch (_) {}
+    }
+    if (wasRunning && !(tr._done?.isCompleted ?? true)) tr._done!.complete();
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------- queue engine
+
+  void _pump() {
+    _updateKeepAwake();
+    if (paused || step != AuthStep.ready) return;
+    if (!_upBusy) {
+      final next = transfers.where((x) => x.upload && x.status == TStatus.queued);
+      if (next.isNotEmpty) _runUpload(next.first);
+    }
+    if (!_downBusy) {
+      final next = transfers.where((x) => !x.upload && x.status == TStatus.queued);
+      if (next.isNotEmpty) _runDownload(next.first);
+    }
+  }
+
+  void _updateKeepAwake() {
+    NativeBridge.keepAwake(transfers.any((x) => x.running));
+  }
+
+  Future<void> _runUpload(Transfer tr) async {
+    _upBusy = true;
+    tr._done = Completer<void>();
+    try {
+      // 1. Make sure the destination channel exists
+      int chatId;
+      if (tr.destChatId != null) {
+        chatId = tr.destChatId!;
+      } else {
+        tr.status = TStatus.creating;
+        notifyListeners();
+        chatId = await ensureChannel(tr.destKey!, forTransfer: tr);
+      }
+      if (tr.status == TStatus.cancelled) throw _Cancelled();
+      tr.chatId = chatId;
+
+      // 2. Get a real file path (Android copies the one file it is about to upload)
+      tr.status = TStatus.preparing;
+      notifyListeners();
+      String path;
+      if (tr.uri != null) {
+        path = await NativeBridge.copyToCache(tr.uri!, tr.name);
+        tr.tempPath = path;
+      } else {
+        path = tr.sourcePath!;
+      }
+      if (tr.status == TStatus.cancelled) throw _Cancelled();
+
+      // 3. Send it as a document so Telegram keeps the original file untouched
+      final mtimeSec = (tr.modifiedMs ?? 0) ~/ 1000;
+      final caption = 'tirsodrive v1${mtimeSec > 0 ? ' mtime=$mtimeSec' : ''} src=${Platform.isAndroid ? 'android' : 'pc'}';
+      tr.status = TStatus.active;
+      tr._lastTime = DateTime.now();
+      notifyListeners();
+      final msg = await td.call({
+        '@type': 'sendMessage',
+        'chat_id': chatId,
+        'input_message_content': {
+          '@type': 'inputMessageDocument',
+          // TDLib 1.8.6x wraps the file in an inputDocument object
+          'document': {
+            '@type': 'inputDocument',
+            'document': {'@type': 'inputFileLocal', 'path': path},
+            'disable_content_type_detection': true,
+          },
+          'caption': {'@type': 'formattedText', 'text': caption, 'entities': <dynamic>[]},
+        },
+      });
+      tr.tempMessageId = (msg['id'] as num).toInt();
+      final doc = msg['content']?['document']?['document'] as Map<String, dynamic>?;
+      if (doc != null) {
+        tr.fileId = (doc['id'] as num).toInt();
+        _byFileId[tr.fileId!] = tr;
+      }
+      await tr._done!.future;
+    } on _Cancelled {
+      tr.status = TStatus.cancelled;
+    } on TdError catch (e) {
+      tr.status = TStatus.failed;
+      tr.error = e.message;
+    } catch (e) {
+      tr.status = TStatus.failed;
+      tr.error = e.toString();
+    }
+    if (tr.fileId != null) _byFileId.remove(tr.fileId);
+    if (tr.tempPath != null) {
+      try {
+        File(tr.tempPath!).deleteSync();
+      } catch (_) {}
+    }
+    if (tr.uri != null && tr.status == TStatus.done) NativeBridge.releaseUri(tr.uri!);
+    _batchDone++;
+    _upBusy = false;
+    notifyListeners();
+    _pump();
+  }
+
+  Future<void> _runDownload(Transfer tr) async {
+    _downBusy = true;
+    tr._done = Completer<void>();
+    final f = tr.file!;
+    tr.fileId = f.fileId;
+    _byFileId[f.fileId] = tr;
+    tr.status = TStatus.active;
+    tr._lastTime = DateTime.now();
+    notifyListeners();
+    String? path;
+    try {
+      final res = await td.call({
+        '@type': 'downloadFile',
+        'file_id': f.fileId,
+        'priority': 16,
+        'offset': 0,
+        'limit': 0,
+        'synchronous': false,
+      });
+      if (res['local']?['is_downloading_completed'] == true) {
+        tr.bytes = tr.size;
+        tr._done!.complete();
+      }
+      await tr._done!.future;
+      if (tr.status != TStatus.cancelled) {
+        final file = await td.call({'@type': 'getFile', 'file_id': f.fileId});
+        path = file['local']?['path'] as String?;
+        if (path == null || path.isEmpty) throw Exception('Download did not finish');
+        tr.status = TStatus.done;
+        tr.bytes = tr.size;
+      }
+    } on TdError catch (e) {
+      tr.status = TStatus.failed;
+      tr.error = e.message;
+    } catch (e) {
+      tr.status = TStatus.failed;
+      tr.error = e.toString();
+    }
+    _byFileId.remove(f.fileId);
+    _downBusy = false;
+    notifyListeners();
+    _pump();
+    if (path != null && tr.status == TStatus.done) {
+      try {
+        if (tr.action == 'save') {
+          final where = await NativeBridge.saveToDownloads(path, f.name, f.mime);
+          _say(t('saved_to', {'p': where}));
+        } else {
+          await NativeBridge.openFile(path, f.mime);
+        }
+      } catch (e) {
+        _say(tr.action == 'save' ? t('err_generic', {'e': e}) : t('open_failed'));
+      }
+    }
+  }
+
+  void _onFile(Map<String, dynamic> file) {
+    final id = (file['id'] as num).toInt();
+    final tr = _byFileId[id];
+    if (tr == null) return;
+    if (tr.upload) {
+      final up = (file['remote']?['uploaded_size'] as num?)?.toInt() ?? 0;
+      tr._progress(up);
+    } else {
+      final local = file['local'] as Map<String, dynamic>? ?? {};
+      tr._progress((local['downloaded_size'] as num?)?.toInt() ?? 0);
+      if (local['is_downloading_completed'] == true && !(tr._done?.isCompleted ?? true)) {
+        tr._done!.complete();
+      } else if (local['is_downloading_active'] == false &&
+          local['is_downloading_completed'] != true &&
+          tr.status == TStatus.active &&
+          tr.bytes > 0 &&
+          !(tr._done?.isCompleted ?? true)) {
+        // download stopped without finishing
+        tr.status = TStatus.failed;
+        tr.error = 'Download stopped';
+        tr._done!.complete();
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Finds the upload a Telegram "sent"/"failed" signal belongs to.
+  /// Temporary message numbers restart in every channel, so the channel must match too,
+  /// and only an upload that is still waiting can be the one.
+  Transfer? _uploadFor(int chatId, int oldId) {
+    for (final tr in transfers) {
+      if (tr.upload && !tr.finished && tr.chatId == chatId && tr.tempMessageId == oldId) return tr;
+    }
+    return null;
+  }
+
+  void _onSent(Map<String, dynamic> message, int oldId) {
+    final tr = _uploadFor((message['chat_id'] as num).toInt(), oldId);
+    if (tr != null) {
+      tr.status = TStatus.done;
+      tr.bytes = tr.size;
+      if (!(tr._done?.isCompleted ?? true)) tr._done!.complete();
+    }
+    _addMessage(message);
+    notifyListeners();
+  }
+
+  void _onSendFailed(Map<String, dynamic> message, int oldId, String error) {
+    final tr = _uploadFor((message['chat_id'] as num).toInt(), oldId);
+    if (tr != null) {
+      tr.status = TStatus.failed;
+      tr.error = error;
+      if (!(tr._done?.isCompleted ?? true)) tr._done!.complete();
+    }
+    notifyListeners();
+  }
+
+  // "Uploading 2 of 5" counts only the current batch, not everything since the app opened.
+  int _batchTotal = 0;
+  int _batchDone = 0;
+  int get uploadsTotal => _batchTotal;
+  int get uploadsDone => _batchDone;
+}
+
+class _Cancelled implements Exception {}
