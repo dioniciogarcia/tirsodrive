@@ -15,7 +15,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.3.0';
+const String appVersion = '0.4.0';
 
 class DriveChannel {
   final int chatId;
@@ -53,6 +53,14 @@ class DriveFile {
   String get ext => extensionOf(name).toUpperCase();
 }
 
+class ShareTarget {
+  final int chatId;
+  final String title;
+  final bool group;
+  final int? userId; // contacts without a chat yet
+  const ShareTarget({required this.chatId, required this.title, this.group = false, this.userId});
+}
+
 enum TStatus { queued, preparing, creating, waiting, active, done, failed, cancelled }
 
 class Transfer {
@@ -84,6 +92,8 @@ class Transfer {
   int _lastBytes = 0;
   DateTime _lastTime = DateTime.now();
   Completer<void>? _done;
+  /// Downloads: completes with the local file path (or null if it failed/was cancelled).
+  final Completer<String?> result = Completer<String?>();
 
   Transfer.upload({required this.name, required this.size, this.uri, this.sourcePath, this.modifiedMs, this.destKey, this.destChatId})
       : upload = true,
@@ -127,6 +137,7 @@ class Drive extends ChangeNotifier {
   // settings
   String lang = 'en';
   int maxBytes = 2000 * 1024 * 1024; // Telegram's free limit (≈2 GB)
+  String sortMode = 'new'; // new | old | az | za | big | small
   int apiId = builtInApiId;
   String apiHash = builtInApiHash;
 
@@ -144,6 +155,7 @@ class Drive extends ChangeNotifier {
   // account
   String myName = '';
   String myPhone = '';
+  int myId = 0;
   String connection = 'connectionStateConnecting';
 
   // chats & channels
@@ -168,6 +180,7 @@ class Drive extends ChangeNotifier {
     lang = _prefs.getString('lang') ?? (sys == 'es' ? 'es' : 'en');
     appLang = lang;
     maxBytes = _prefs.getInt('maxBytes') ?? maxBytes;
+    sortMode = _prefs.getString('sortMode') ?? sortMode;
     if (builtInApiId == 0) {
       apiId = _prefs.getInt('apiId') ?? 0;
       apiHash = _prefs.getString('apiHash') ?? '';
@@ -202,6 +215,37 @@ class Drive extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSort(String m) {
+    sortMode = m;
+    _prefs.setString('sortMode', m);
+    notifyListeners();
+  }
+
+  List<DriveFile> sorted(List<DriveFile> files) {
+    final out = List<DriveFile>.from(files);
+    int byName(DriveFile a, DriveFile b) => a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    switch (sortMode) {
+      case 'old':
+        out.sort((a, b) => a.date != b.date ? a.date.compareTo(b.date) : a.messageId.compareTo(b.messageId));
+        break;
+      case 'az':
+        out.sort(byName);
+        break;
+      case 'za':
+        out.sort((a, b) => byName(b, a));
+        break;
+      case 'big':
+        out.sort((a, b) => b.size.compareTo(a.size));
+        break;
+      case 'small':
+        out.sort((a, b) => a.size.compareTo(b.size));
+        break;
+      default:
+        out.sort((a, b) => a.date != b.date ? b.date.compareTo(a.date) : b.messageId.compareTo(a.messageId));
+    }
+    return out;
+  }
+
   void setMaxBytes(int b) {
     maxBytes = b;
     _prefs.setInt('maxBytes', b);
@@ -230,6 +274,17 @@ class Drive extends ChangeNotifier {
         final id = (u['chat_id'] as num).toInt();
         _chats[id]?['title'] = u['title'];
         if (channelsLoaded) notifyListeners();
+        break;
+      case 'updateChatPosition':
+        final id = (u['chat_id'] as num).toInt();
+        final pos = u['position'] as Map<String, dynamic>;
+        final chat = _chats[id];
+        if (chat != null) {
+          final list = List<dynamic>.from((chat['positions'] as List?) ?? []);
+          list.removeWhere((p) => jsonEncode((p as Map)['list']) == jsonEncode(pos['list']));
+          if ('${pos['order']}' != '0') list.add(pos);
+          chat['positions'] = list;
+        }
         break;
       case 'updateSupergroup':
         final s = u['supergroup'] as Map<String, dynamic>;
@@ -423,6 +478,7 @@ class Drive extends ChangeNotifier {
       final me = await td.call({'@type': 'getMe'});
       myName = [me['first_name'], me['last_name']].where((e) => e != null && '$e'.isNotEmpty).join(' ');
       myPhone = (me['phone_number'] ?? '').toString();
+      myId = (me['id'] as num?)?.toInt() ?? 0;
     } catch (_) {}
     await loadChannels();
     await _restoreQueue();
@@ -801,6 +857,122 @@ class Drive extends ChangeNotifier {
 
   List<DriveFile> get allFiles => [for (final c in channels) ...?filesByChat[c.chatId]];
 
+  // ---------------------------------------------------------------- sharing
+
+  /// Downloads a file (through the normal queue, with progress) and returns where it is on this device.
+  Future<String?> fetch(DriveFile f) {
+    final tr = Transfer.download(f, 'keep');
+    transfers.add(tr);
+    notifyListeners();
+    _pump();
+    return tr.result.future;
+  }
+
+  String _orderInMain(Map<String, dynamic> chat) {
+    for (final p in (chat['positions'] as List?) ?? const []) {
+      if ((p as Map)['list']?['@type'] == 'chatListMain') return '${p['order']}';
+    }
+    return '0';
+  }
+
+  /// Chats you can send files to: Saved Messages, your recent chats and groups (not TirsoDrive channels).
+  List<ShareTarget> shareChats() {
+    final out = <(BigInt, ShareTarget)>[];
+    _chats.forEach((id, c) {
+      if (_isMyChannel(c)) return;
+      final type = c['type'] as Map<String, dynamic>? ?? {};
+      final kind = type['@type'];
+      final isChannel = kind == 'chatTypeSupergroup' && type['is_channel'] == true;
+      if (kind == 'chatTypeSecret' || isChannel) return;
+      final order = BigInt.tryParse(_orderInMain(c)) ?? BigInt.zero;
+      if (order == BigInt.zero && id != myId) return; // not in your chat list
+      final title = id == myId ? t('saved_messages') : (c['title'] ?? '').toString();
+      final group = kind == 'chatTypeBasicGroup' || kind == 'chatTypeSupergroup';
+      out.add((id == myId ? BigInt.parse('9' * 30) : order, ShareTarget(chatId: id, title: title, group: group)));
+    });
+    out.sort((a, b) => b.$1.compareTo(a.$1));
+    return out.map((e) => e.$2).toList();
+  }
+
+  /// Your Telegram contacts that don't already appear in [shareChats].
+  Future<List<ShareTarget>> shareContacts(Set<int> already) async {
+    try {
+      final res = await td.call({'@type': 'getContacts'});
+      final ids = ((res['user_ids'] as List?) ?? []).map((e) => (e as num).toInt()).where((id) => !already.contains(id)).toList();
+      final users = await Future.wait(ids.take(400).map((id) => td.call({'@type': 'getUser', 'user_id': id}).then<Map<String, dynamic>?>((u) => u, onError: (_) => null)));
+      final out = <ShareTarget>[];
+      for (final u in users) {
+        if (u == null) continue;
+        final name = [u['first_name'], u['last_name']].where((e) => e != null && '$e'.isNotEmpty).join(' ');
+        out.add(ShareTarget(chatId: (u['id'] as num).toInt(), title: name.isEmpty ? '?' : name, userId: (u['id'] as num).toInt()));
+      }
+      out.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Sends files to a chat as a clean copy (no "Forwarded from", no TirsoDrive caption). Nothing is re-uploaded.
+  Future<void> sendToChat(ShareTarget target, List<DriveFile> files) async {
+    try {
+      if (target.userId != null) await td.call({'@type': 'createPrivateChat', 'user_id': target.userId, 'force': false});
+      final bySource = <int, List<DriveFile>>{};
+      for (final f in files) {
+        bySource.putIfAbsent(f.chatId, () => []).add(f);
+      }
+      for (final e in bySource.entries) {
+        await td.call({
+          '@type': 'forwardMessages',
+          'chat_id': target.chatId,
+          'from_chat_id': e.key,
+          'message_ids': e.value.map((f) => f.messageId).toList(),
+          'send_copy': true,
+          'remove_caption': true,
+        });
+      }
+      _say(t('sent_to', {'n': files.length, 'c': target.title}));
+    } on TdError catch (e) {
+      _say(e.retryAfter != null ? t('err_flood', {'s': e.retryAfter}) : t('err_generic', {'e': e.message}));
+    }
+  }
+
+  /// Downloads the files, then hands them to the Android share menu (WhatsApp, Instagram, Drive…).
+  Future<void> shareToApps(List<DriveFile> files) async {
+    final paths = <String>[];
+    final names = <String>[];
+    final mimes = <String>[];
+    for (final f in files) {
+      final p = await fetch(f);
+      if (p == null) continue;
+      paths.add(p);
+      names.add(f.name);
+      mimes.add(f.mime);
+    }
+    if (paths.isEmpty) return;
+    try {
+      await NativeBridge.shareFiles(paths, names, mimes);
+    } catch (e) {
+      _say(t('err_generic', {'e': e}));
+    }
+  }
+
+  /// Windows: downloads the files and copies them into a cloud folder (Google Drive, OneDrive…).
+  Future<void> sendToFolder(List<DriveFile> files, String folder, String label) async {
+    var n = 0;
+    for (final f in files) {
+      final p = await fetch(f);
+      if (p == null) continue;
+      try {
+        await NativeBridge.copyInto(p, f.name, '$folder${Platform.pathSeparator}TirsoDrive');
+        n++;
+      } catch (e) {
+        _say(t('err_generic', {'e': e}));
+      }
+    }
+    if (n > 0) _say(t('sent_to', {'n': n, 'c': label}));
+  }
+
   Future<void> deleteFile(DriveFile f) async {
     try {
       await td.call({'@type': 'deleteMessages', 'chat_id': f.chatId, 'message_ids': [f.messageId], 'revoke': true});
@@ -879,6 +1051,7 @@ class Drive extends ChangeNotifier {
   Future<void> cancel(Transfer tr) async {
     if (tr.finished) return;
     final wasRunning = tr.running;
+    if (!tr.upload && !wasRunning && !tr.result.isCompleted) tr.result.complete(null);
     if (tr.upload && !wasRunning) _batchDone++; // a queued one never runs, so count it here
     tr.status = TStatus.cancelled;
     if (tr.upload && tr.tempMessageId != null && tr.chatId != null) {
@@ -1147,7 +1320,8 @@ class Drive extends ChangeNotifier {
     _downBusy = false;
     notifyListeners();
     _pump();
-    if (path != null && tr.status == TStatus.done) {
+    if (!tr.result.isCompleted) tr.result.complete(tr.status == TStatus.done ? path : null);
+    if (path != null && tr.status == TStatus.done && tr.action != 'keep') {
       try {
         if (tr.action == 'save') {
           final where = await NativeBridge.saveToDownloads(path, f.name, f.mime);

@@ -61,6 +61,10 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "shareFiles" -> background(result) {
+                    shareFiles(call.argument<List<String>>("paths")!!, call.argument<List<String>>("names")!!, call.argument<List<String>>("mimes")!!)
+                    true
+                }
                 "askNotifications" -> {
                     if (Build.VERSION.SDK_INT >= 33 &&
                         checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -220,6 +224,40 @@ class MainActivity : FlutterActivity() {
             val out = File(dir, name)
             src.copyTo(out, overwrite = true)
             return out.absolutePath
+        }
+    }
+
+    /** Copies files to cache/share with their TirsoDrive names, then opens the Android share menu. */
+    private fun shareFiles(paths: List<String>, names: List<String>, mimes: List<String>) {
+        val dir = File(cacheDir, "share")
+        dir.deleteRecursively()
+        dir.mkdirs()
+        val uris = ArrayList<Uri>()
+        paths.forEachIndexed { i, p ->
+            val safe = names[i].replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val sub = File(dir, i.toString())
+            sub.mkdirs()
+            val out = File(sub, safe)
+            File(p).copyTo(out, overwrite = true)
+            uris.add(FileProvider.getUriForFile(this, "$packageName.files", out))
+        }
+        val distinct = mimes.toSet()
+        val mime = when {
+            distinct.size == 1 -> distinct.first()
+            distinct.all { it.startsWith("image/") } -> "image/*"
+            distinct.all { it.startsWith("video/") } -> "video/*"
+            else -> "*/*"
+        }
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply { putExtra(Intent.EXTRA_STREAM, uris[0]) }
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply { putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris) }
+        }
+        intent.type = mime
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.clipData = android.content.ClipData.newRawUri(null, uris[0]).also { c -> uris.drop(1).forEach { c.addItem(android.content.ClipData.Item(it)) } }
+        main.post {
+            startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         }
     }
 

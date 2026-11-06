@@ -92,6 +92,54 @@ class NativeBridge {
     return '$home\\Downloads\\TirsoDrive';
   }
 
+  /// Copies a file into [dirPath] (created if needed) without overwriting; returns the new path.
+  static Future<String> copyInto(String path, String name, String dirPath) async {
+    final dir = Directory(dirPath);
+    dir.createSync(recursive: true);
+    final safe = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final dot = safe.lastIndexOf('.');
+    final base = dot > 0 ? safe.substring(0, dot) : safe;
+    final ext = dot > 0 ? safe.substring(dot) : '';
+    final sep = Platform.pathSeparator;
+    var target = File('${dir.path}$sep$safe');
+    var i = 1;
+    while (target.existsSync()) {
+      target = File('${dir.path}$sep$base ($i)$ext');
+      i++;
+    }
+    await File(path).copy(target.path);
+    return target.path;
+  }
+
+  /// Windows cloud folders that sync automatically (Google Drive for desktop, OneDrive, Dropbox).
+  static List<(String, String)> cloudFolders() {
+    if (!Platform.isWindows) return [];
+    final out = <(String, String)>[];
+    final env = Platform.environment;
+    final od = env['OneDrive'] ?? env['OneDriveConsumer'];
+    if (od != null && Directory(od).existsSync()) out.add(('OneDrive', od));
+    for (var c = 'D'.codeUnitAt(0); c <= 'Z'.codeUnitAt(0); c++) {
+      for (final sub in ['My Drive', 'Mi unidad']) {
+        final p = '${String.fromCharCode(c)}:\\$sub';
+        if (Directory(p).existsSync()) out.add(('Google Drive', p));
+      }
+    }
+    final home = env['USERPROFILE'];
+    if (home != null) {
+      for (final (label, sub) in [('Google Drive', 'Google Drive'), ('Dropbox', 'Dropbox')]) {
+        final p = '$home\\$sub';
+        if (Directory(p).existsSync() && !out.any((o) => o.$2 == p)) out.add((label, p));
+      }
+    }
+    return out;
+  }
+
+  /// Android share menu for one or more downloaded files.
+  static Future<void> shareFiles(List<String> paths, List<String> names, List<String> mimes) async {
+    if (!Platform.isAndroid) return;
+    await _ch.invokeMethod('shareFiles', {'paths': paths, 'names': names, 'mimes': mimes});
+  }
+
   static Future<String> saveToDownloads(String path, String name, String mime) async {
     if (!Platform.isAndroid) {
       final dir = Directory(_windowsDownloads());

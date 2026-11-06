@@ -57,7 +57,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
         final id = _chatId;
         final channel = id == null ? null : d.channelById(id);
         final all = id == null ? <DriveFile>[] : (d.filesByChat[id] ?? <DriveFile>[]);
-        final files = _filter.isEmpty ? all : all.where((f) => f.name.toLowerCase().contains(_filter.toLowerCase())).toList();
+        final files = d.sorted(_filter.isEmpty ? all : all.where((f) => f.name.toLowerCase().contains(_filter.toLowerCase())).toList());
         final loading = id != null && d.loadingChats.contains(id);
         final pending = d.transfers.where((x) =>
             x.upload &&
@@ -90,6 +90,30 @@ class _ChannelScreenState extends State<ChannelScreen> {
               ),
             ]),
             actions: [
+              PopupMenuButton<String>(
+                tooltip: t('f_sort'),
+                icon: const Icon(Icons.sort),
+                initialValue: d.sortMode,
+                onSelected: d.setSort,
+                itemBuilder: (_) => [
+                  for (final (k, label) in [
+                    ('new', t('s_new')),
+                    ('old', t('s_old')),
+                    ('az', t('s_name')),
+                    ('za', t('s_name_za')),
+                    ('big', t('s_big')),
+                    ('small', t('s_small')),
+                  ])
+                    PopupMenuItem(
+                      value: k,
+                      child: Row(children: [
+                        Icon(d.sortMode == k ? Icons.check : null, size: 18, color: C.accent),
+                        const SizedBox(width: 10),
+                        Text(label),
+                      ]),
+                    ),
+                ],
+              ),
               if (id != null)
                 IconButton(tooltip: 'Refresh', onPressed: () => d.loadFiles(id, refresh: true), icon: const Icon(Icons.refresh)),
             ],
