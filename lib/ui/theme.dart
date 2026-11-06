@@ -21,15 +21,15 @@ class C {
   static Color get green => dark ? const Color(0xFF6FD39A) : const Color(0xFF1C8F52);
   static Color get greenBg => dark ? const Color(0xFF12261F) : const Color(0xFFE7F6EE);
   static Color get greenBorder => dark ? const Color(0xFF1E4A38) : const Color(0xFFBCE3CC);
-  static Color get greenSub => dark ? C.greenSub : const Color(0xFF2F6B4B);
+  static Color get greenSub => dark ? const Color(0xFFA9C9B8) : const Color(0xFF2F6B4B);
   static Color get amber => dark ? const Color(0xFFF5A524) : const Color(0xFFF5A524);
   static Color get amberBg => dark ? const Color(0xFF2A1E0C) : const Color(0xFFFFF6E3);
   static Color get amberBorder => dark ? const Color(0xFF5A3D10) : const Color(0xFFF0D39B);
   static Color get amberText => dark ? const Color(0xFFFBD38D) : const Color(0xFF8A5A00);
-  static Color get amberSub => dark ? C.amberSub : const Color(0xFF6B4A12);
-  static Color get amberTip => dark ? C.amberTip : const Color(0xFF7A5A1F);
+  static Color get amberSub => dark ? const Color(0xFFF1DDBA) : const Color(0xFF6B4A12);
+  static Color get amberTip => dark ? const Color(0xFFD9BE8E) : const Color(0xFF7A5A1F);
   static Color get red => dark ? const Color(0xFFE86F6F) : const Color(0xFFC93C3C);
-  static Color get selected => dark ? C.selected : const Color(0xFFDCEBFB);
+  static Color get selected => dark ? const Color(0xFF1E2A44) : const Color(0xFFDCEBFB);
   static Color get strong => dark ? const Color(0xFFFFFFFF) : const Color(0xFF0B1220);
 }
 

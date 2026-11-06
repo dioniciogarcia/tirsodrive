@@ -19,7 +19,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.6.0';
+const String appVersion = '0.6.1';
 
 class DriveChannel {
   final int chatId;
@@ -238,6 +238,7 @@ class Drive extends ChangeNotifier {
 
   Future<void> loadTheme() async {
     final p = await SharedPreferences.getInstance();
+    _prefs = p;
     themeMode = p.getString('theme') ?? 'dark';
     _applyTheme();
     PlatformDispatcher.instance.onPlatformBrightnessChanged = () {

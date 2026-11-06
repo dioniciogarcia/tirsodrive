@@ -72,8 +72,10 @@ class SettingsScreen extends StatelessWidget {
                 SizedBox(height: 16),
                 SectionLabel(t('sync_title')),
                 SizedBox(height: 10),
-                Panel(
-                  padding: EdgeInsets.zero,
+                Material(
+                  color: C.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: C.border)),
+                  clipBehavior: Clip.antiAlias,
                   child: ListTile(
                     leading: Icon(Icons.sync, color: C.accentSoft),
                     title: Text(t('sync_title'), style: TextStyle(fontWeight: FontWeight.w600)),
