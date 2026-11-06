@@ -35,11 +35,28 @@ Each person signs in with their own Telegram account and only sees their own fil
 - **Tap any file** to Open it, Save it to Download/TirsoDrive, see File info, or Delete it.
 - English / Spanish switch, and the screen stays on while transfers run.
 
+
+## Windows
+
+1. Double-click **TirsoDrive-Setup-0.1.3.exe**. Admin rights aren't needed.
+2. Windows may show **"Windows protected your PC"**, because the installer isn't signed with a paid certificate.
+   Click **More info → Run anyway**.
+3. Choose a language, tick "Create a desktop shortcut" if you want one, and install.
+4. Sign in with the **QR code** (scan it from Telegram on your phone: Settings › Devices › Link Desktop Device)
+   or with your phone number.
+
+On Windows:
+- **Drag files** onto the open channel to upload them straight into it.
+- **Drop a folder**, or click **Back up a folder**: every file inside it, including subfolders, is sorted into the right channels,
+  and you review the list before anything uploads.
+- Saved files go to **Downloads\TirsoDrive**.
+- **TirsoDrive-0.1.3-portable.zip** is the same app without installing: unzip it anywhere and run TirsoDrive.exe.
+
 ## Known limits in this phase
 
 - Keep the app open while it uploads. Uploads that continue after you close the app come in a later phase.
 - If you close the app, the transfer queue is not remembered yet.
-- Windows version, sync, backup scan, global search, sharing and the rest come in the next phases.
+- Sync, global search, sharing, the T: drive and the rest come in the next phases (see HANDOFF.md).
 
 ## Keep private
 
