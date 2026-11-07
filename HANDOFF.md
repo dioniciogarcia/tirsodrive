@@ -48,6 +48,22 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
   app lock, duplicate finder, ROM box art (libretro thumbnails), TV mode, optional encryption, favorites/collections,
   splitting files over 2 GB (keep OFF for now).
 
+## NEXT UPDATE (Monday) — the user's list, saved 2026-11-06, nothing built yet
+1. Two new libraries/categories: **Audio** and **Documents** (channels "TD - Audio", "TD - Documents"; route mp3/m4a/flac/wav/ogg/opus… and pdf/docx/xlsx/pptx/txt/epub… there).
+2. **Fix the upload-rule toggles** (Wi-Fi only / charging / quiet hours): they don't work properly.
+3. **Subcategories for Games (APKs)**, like ROMs: one channel per console (ties in with the "TD - <Console> APKs" channels).
+4. Remove the green "Connected to Telegram" box; instead show a small status dot/symbol right after the "TirsoDrive" title.
+5. **Drive letter (T:)**: it says "WebClient service is not running" even though it IS running — fix the detection or mapping.
+6. **Start with Windows** option.
+7. **Changing the theme sends you back to the home screen** — keep the current screen (don't recreate MaterialApp with a new key; rebuild the colors in place).
+8. **Android "connecting" status** shows a spinner almost constantly — show it only while actually connecting, and settle to "connected".
+9. **Add TirsoDrive to NuORDER Client, as a separate chat/project** (do it in its own conversation; NuORDER Client = the user's work exe for Excel cleaning and image matching).
+10. **A separate channel for each connected program**, so work files never mix with personal ones (a "work profile").
+11. **Windows tray icon with an upload status card**, like OneDrive (click the icon near the clock → popup with current uploads and progress).
+12. **Windows uploads keep going in the background** even when minimized or the window is closed (close to tray instead of quitting).
+13. **Console logos** for each console (ROM and APK libraries).
+14. **Thumbnails/previews** for images and videos in the file lists (Telegram's thumbnails for photos/videos, when available).
+
 ## Still to build (suggested order)
 - LATER (the user postponed it): in-app updates. Recommended: GitHub builds the APK too (signing key as a GitHub secret), and a bot posts builds to a private "TD - Updates" channel; the app checks it and offers Update. Not public GitHub releases (the APK contains the API hash).
 (DONE in 0.3.0: global search + filters (search_screen.dart); Copy/Move via forwardMessages send_copy (move deletes the original after the copy is confirmed); Rename = `name=<urlencoded>` in the caption; multi-select + bulk actions (file_actions.dart).)
