@@ -67,6 +67,9 @@ On Windows:
 
 ## Changes
 
+- **0.11.0:** **TirsoDrive in Android's file picker** ("Save to…", backups, game saves): pick TirsoDrive, choose a channel folder, save. The file uploads when TirsoDrive can (right away if it's open; otherwise a notification asks you to open it). Browsing shows what TirsoDrive last indexed; to open a cloud file, use the app.
+  **Wear OS watch app** (separate download, TirsoDrive-Watch-Installer-0.11.0.zip): swipe through categories, subcategories (APKs/ROMs by console), browse, search by voice, send to up to 6 favorite contacts. It asks the phone, so it never signs in to Telegram and uses no device slot. Setup: phone Settings › Watch & file picker.
+
 - **0.10.0:** **Previews:** photos and videos show a small picture in file lists (new uploads carry one; older photos under 4 MB get one on demand; videos uploaded before this show the badge until re-uploaded; Windows makes previews for photos only).
   **Connect another program** (Settings › Connected programs): its own bot + its own channel(s), and "Keep separate from my personal files" keeps them out of your search, favorites and duplicates (open them from "Programs" / the lock-marked sidebar section).
 - **0.9.1:** **Games (APKs) by console** (N64, GBA, DS, GameCube, Wii, PS1, PS2, PSP + "Other games"), **console logos**, tray/start-with-Windows hardening, and a diagnostic log (`desktop.log`) for the T: drive and tray.

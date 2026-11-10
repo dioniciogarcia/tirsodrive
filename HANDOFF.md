@@ -48,7 +48,7 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
   app lock, duplicate finder, ROM box art (libretro thumbnails), TV mode, optional encryption, favorites/collections,
   splitting files over 2 GB (keep OFF for now).
 
-## STATUS 2026-11-10: 0.9.0, 0.9.1, 0.10.0 built (Windows tray/autostart/T: diagnostics, Audio/Docs, APKs by console, console logos, thumbnails, program isolation).
+## STATUS 2026-11-10: 0.11.0 built too (phone DocumentsProvider TirsoDocs.kt + WearBridge.kt + lib/core/phone_bridge.dart td_index.json; Wear OS Compose module android/wear, build with `cd android && ./gradlew :wear:assembleRelease`, installed via Install-on-Watch.bat). Earlier: 0.9.0, 0.9.1, 0.10.0 built (Windows tray/autostart/T: diagnostics, Audio/Docs, APKs by console, console logos, thumbnails, program isolation).
 Still open: confirm tray + Start with Windows + T: drive on the user's PC (ask for desktop.log in app support folder); 0.11.0 = Android storage provider (DocumentsProvider) + Wear OS companion (Data Layer via phone app, no Telegram session); NuORDER Client integration happens in its own chat using tools/tirso_upload.py + the program setup file.
 ## (original list, 2026-11-06)
 1. Two new libraries/categories: **Audio** and **Documents** (channels "TD - Audio", "TD - Documents"; route mp3/m4a/flac/wav/ogg/opus… and pdf/docx/xlsx/pptx/txt/epub… there).
