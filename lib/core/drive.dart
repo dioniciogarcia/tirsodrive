@@ -24,7 +24,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.12.1';
+const String appVersion = '0.12.2';
 
 class DriveChannel {
   final int chatId;
@@ -134,6 +134,8 @@ class Transfer {
   String? tempPath;
   double speed = 0;
   int _lastBytes = 0;
+  DateTime lastMove = DateTime.now(); // last time any bytes moved (for the stall watchdog)
+  int autoRetries = 0;
   DateTime _lastTime = DateTime.now();
   Completer<void>? _done;
   /// Downloads: completes with the local file path (or null if it failed/was cancelled).
@@ -166,6 +168,7 @@ class Transfer {
       _lastBytes = b;
       _lastTime = now;
     }
+    if (b > bytes) lastMove = now;
     bytes = b;
   }
 
@@ -339,7 +342,60 @@ class Drive extends ChangeNotifier {
     _checkRules();
   }
 
+  // ---- stall watchdog: tells TDLib when the network changes, and nudges / restarts transfers that stop moving
+  String _netType = '';
+  DateTime _lastPoke = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _notReadySince = DateTime.now();
+
+  Future<void> _setNetwork(String type) async {
+    try {
+      await td.call({'@type': 'setNetworkType', 'type': {'@type': type}});
+      _netType = type;
+    } catch (_) {}
+  }
+
+  Future<void> _watchdog() async {
+    if (step != AuthStep.ready) return;
+    final now = DateTime.now();
+    // 1. Wi-Fi <-> mobile data switches: TDLib only reconnects quickly when it is told
+    if (Platform.isAndroid) {
+      final st = await NativeBridge.deviceState();
+      final want = st.$1 == true ? 'networkTypeWiFi' : 'networkTypeMobile';
+      if (want != _netType) await _setNetwork(want);
+    }
+    if (connection == 'connectionStateReady') _notReadySince = now;
+    final busy = transfers.where((x) => x.status == TStatus.active && !x.finished).toList();
+    if (busy.isEmpty && connection == 'connectionStateReady') return;
+    // 2. not connected for a while, or nothing has moved for 45 s: make TDLib reconnect
+    final stalled = busy.any((x) => now.difference(x.lastMove).inSeconds > 45);
+    final offline = busy.isNotEmpty && now.difference(_notReadySince).inSeconds > 30;
+    if ((stalled || offline) && now.difference(_lastPoke).inSeconds > 45) {
+      _lastPoke = now;
+      final back = Platform.isAndroid ? (_netType.isEmpty ? 'networkTypeOther' : _netType) : 'networkTypeOther';
+      await _setNetwork('networkTypeNone');
+      await Future.delayed(const Duration(seconds: 1));
+      await _setNetwork(back);
+    }
+    // 3. an upload that has not moved for 3 minutes is restarted (up to 3 times)
+    for (final tr in busy) {
+      if (!tr.upload || tr.autoRetries >= 3 || now.difference(tr.lastMove).inSeconds < 180) continue;
+      if (tr.chatId != null && tr.tempMessageId != null) {
+        try {
+          await td.call({'@type': 'deleteMessages', 'chat_id': tr.chatId, 'message_ids': [tr.tempMessageId], 'revoke': true});
+        } catch (_) {}
+      }
+      tr.autoRetries++;
+      tr.status = TStatus.failed;
+      tr.error = 'Stalled, restarting';
+      if (!(tr._done?.isCompleted ?? true)) tr._done!.complete();
+      Future.delayed(const Duration(seconds: 3), () {
+        if (tr.status == TStatus.failed) retry(tr);
+      });
+    }
+  }
+
   Future<void> _checkRules() async {
+    unawaited(_watchdog());
     String? why;
     final h = DateTime.now().hour;
     if (quietFrom >= 0 && quietTo >= 0 && quietFrom != quietTo) {
@@ -1673,6 +1729,7 @@ class Drive extends ChangeNotifier {
       final caption = 'tirsodrive v1${mtimeSec > 0 ? ' mtime=$mtimeSec' : ''} src=${Platform.isAndroid ? 'android' : 'pc'}${extra.isEmpty ? '' : ' $extra'}';
       tr.status = TStatus.active;
       tr._lastTime = DateTime.now();
+      tr.lastMove = DateTime.now();
       notifyListeners();
       final th = tr.encrypt ? null : await _makeUploadThumb(path, tr.name);
       final msg = await td.call({
@@ -1733,6 +1790,7 @@ class Drive extends ChangeNotifier {
     _byFileId[f.fileId] = tr;
     tr.status = TStatus.active;
     tr._lastTime = DateTime.now();
+      tr.lastMove = DateTime.now();
     notifyListeners();
     String? path;
     try {
