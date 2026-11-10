@@ -56,3 +56,4 @@ android/app/src/main/jniLibs/
 installer/Output/
 
 /android/build/
+android/.kotlin/
