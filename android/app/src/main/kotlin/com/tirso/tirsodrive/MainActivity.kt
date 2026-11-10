@@ -37,10 +37,18 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingPick: MethodChannel.Result? = null
     private val main = Handler(Looper.getMainLooper())
 
+    override fun onDestroy() {
+        TirsoDocs.onInbox = null
+        WearBridge.onShare = null
+        super.onDestroy()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         TransferService.onTogglePause = { main.post { channel.invokeMethod("togglePause", null) } }
+        TirsoDocs.onInbox = { main.post { channel.invokeMethod("inboxChanged", null) } }
+        WearBridge.onShare = { main.post { channel.invokeMethod("wearShare", null) } }
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "serviceUpdate" -> {
