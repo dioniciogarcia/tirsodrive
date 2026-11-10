@@ -84,3 +84,6 @@ Still open: confirm tray + Start with Windows + T: drive on the user's PC (ask f
   Unfinished uploads are saved in prefs 'queue_v1' and restored after login; a half-sent message is deleted and re-sent. Swiping the app away stops it (resumes on next open).
 - TV not tested yet by the user.
 - Windows 0.8.0 installer + portable delivered (GitHub run 42311045096). Windows CMakeLists defines _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS for local_auth_windows (newest MSVC on the runners refuses /await otherwise).
+
+## STATUS 2026-11-10 (later): 0.12.0 removed the T: drive (webdav.dart deleted; Windows rejected every mapping with error 67). Windows close-to-tray is native (flutter_window.cpp reads %TEMP%\tirsodrive-tray.flag) and setSkipTaskbar was removed (it crashed the app on tray click).
+0.13.0 Wear OS app is STANDALONE: its own TDLib session (libtdjson.so via JNA, files Td.kt/Tg.kt), QR login (zxing), 2FA password screen, vertical snapping pager + crown, voice search for files and contacts, sends with forwardMessages send_copy. It shows only the known categories (custom/program channels are not shown, which keeps work files off the watch). Untested on a real watch. Build: `cd android && ./gradlew :wear:assembleRelease`; libtdjson.so copied to android/wear/src/main/jniLibs (gitignored). Install on the watch via adb/Install-on-Watch.bat.

@@ -57,3 +57,4 @@ installer/Output/
 
 /android/build/
 android/.kotlin/
+android/wear/src/main/jniLibs/

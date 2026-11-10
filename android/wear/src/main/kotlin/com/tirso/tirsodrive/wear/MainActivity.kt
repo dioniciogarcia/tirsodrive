@@ -10,25 +10,33 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,13 +50,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
@@ -56,13 +72,15 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material.Chip
 import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.CircularProgressIndicator
+import androidx.wear.compose.material.Colors
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
-import androidx.wear.compose.material.Colors
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.abs
@@ -74,7 +92,7 @@ private val Muted = Color(0xFF8C97AD)
 sealed class Screen {
     object Home : Screen()
     data class Kids(val parent: String, val title: String) : Screen()
-    data class Files(val title: String, val chat: Long, val kids: String = "", val preset: List<WFile>? = null) : Screen()
+    data class Files(val title: String, val chat: Long, val preset: List<WFile>? = null) : Screen()
     data class Detail(val file: WFile) : Screen()
     data class Share(val file: WFile) : Screen()
 }
@@ -82,95 +100,108 @@ sealed class Screen {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PhoneLink.attach(this)
+        Tg.init(this)
         setContent { WatchApp() }
     }
-
-    override fun onDestroy() {
-        PhoneLink.detach(this)
-        super.onDestroy()
-    }
 }
+
+private fun voiceIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
 
 @Composable
 fun WatchApp() {
     // true black background, TirsoDrive blue accent
     MaterialTheme(colors = Colors(primary = Accent, background = Color.Black, surface = Card, onBackground = Color.White, onSurface = Color.White)) {
-        val ctx = LocalContext.current
-        val scope = rememberCoroutineScope()
-        val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
-        var groups by remember { mutableStateOf<List<Group>>(emptyList()) }
-        var favs by remember { mutableStateOf<List<Contact>>(emptyList()) }
-        var es by remember { mutableStateOf(false) }
-        var loading by remember { mutableStateOf(true) }
-        var failed by remember { mutableStateOf(false) }
-        var goingBack by remember { mutableStateOf(false) }
-        val s = Strings(es)
-
-        fun load() {
-            loading = true; failed = false
-            scope.launch {
-                try {
-                    val r = PhoneLink.request(ctx, "menu")
-                    if (r.optBoolean("empty") || r.has("error")) failed = true
-                    else {
-                        groups = r.optJSONArray("groups").groups()
-                        favs = r.optJSONArray("recent").contacts()
-                        es = r.optString("lang") == "es"
-                    }
-                } catch (_: Exception) { failed = true }
-                loading = false
-            }
-        }
-        LaunchedEffect(Unit) { load() }
-
-        fun push(x: Screen) { goingBack = false; stack.add(x) }
-        fun pop() { if (stack.size > 1) { goingBack = true; stack.removeAt(stack.lastIndex) } }
-        BackHandler(enabled = stack.size > 1) { pop() }
-
-        val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-            if (r.resultCode == Activity.RESULT_OK) {
-                val q = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-                if (!q.isNullOrBlank()) scope.launch {
-                    try {
-                        val res = PhoneLink.request(ctx, "search") { put("q", q) }
-                        push(Screen.Files("\"$q\"", 0, preset = res.optJSONArray("files").wfiles()))
-                    } catch (_: Exception) { failed = true }
-                }
-            }
-        }
-
+        val s = Strings(Tg.es)
         Scaffold(timeText = { TimeText() }, modifier = Modifier.background(Color.Black)) {
             Box(Modifier.fillMaxSize().background(Color.Black)) {
-                when {
-                    loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), indicatorColor = Accent)
-                    failed -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(s.noPhone, textAlign = TextAlign.Center, fontSize = 14.sp)
-                        Chip(onClick = { load() }, label = { Text(s.retry) }, modifier = Modifier.padding(top = 10.dp), colors = ChipDefaults.primaryChipColors(backgroundColor = Accent))
-                    }
-                    else -> AnimatedContent(
-                        targetState = stack.last(),
-                        transitionSpec = {
-                            if (goingBack) (slideInHorizontally(tween(260)) { -it / 3 } + fadeIn(tween(260))) togetherWith (slideOutHorizontally(tween(260)) { it } + fadeOut(tween(200)))
-                            else (slideInHorizontally(tween(260)) { it } + fadeIn(tween(260))) togetherWith (slideOutHorizontally(tween(260)) { -it / 3 } + fadeOut(tween(200)))
-                        },
-                        label = "screens",
-                    ) { screen ->
-                        when (screen) {
-                            is Screen.Home -> HomePager(groups, s,
-                                onSearch = { speech.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) },
-                                onOpen = { g ->
-                                    if (g.kids) push(Screen.Kids(g.key, g.title))
-                                    else push(Screen.Files(g.title, g.chatId))
-                                })
-                            is Screen.Kids -> KidsList(screen, groups.filter { it.parent == screen.parent }) { g -> push(Screen.Files(g.title, g.chatId)) }
-                            is Screen.Files -> FileList(screen, s) { push(Screen.Detail(it)) }
-                            is Screen.Detail -> Detail(screen.file, s, true) { push(Screen.Share(screen.file)) }
-                            is Screen.Share -> ShareList(screen.file, favs, s, onDone = { pop() })
-                        }
+                when (val a = Tg.auth) {
+                    is Auth.Starting, is Auth.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center), indicatorColor = Accent)
+                    is Auth.Qr -> QrLogin(a.link, s)
+                    is Auth.Password -> PasswordLogin(a, s)
+                    is Auth.Ready -> Library(s)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QrLogin(link: String?, s: Strings) {
+    Column(Modifier.fillMaxSize().padding(top = 22.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        if (link == null) CircularProgressIndicator(Modifier.size(28.dp), indicatorColor = Accent)
+        else {
+            val m = remember(link) { QRCodeWriter().encode(link, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 0)) }
+            Box(Modifier.size(124.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(6.dp)) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val cell = size.width / m.width
+                    for (x in 0 until m.width) for (y in 0 until m.height) {
+                        if (m.get(x, y)) drawRect(Color.Black, Offset(x * cell, y * cell), Size(cell + 0.6f, cell + 0.6f))
                     }
                 }
             }
+        }
+        Text(s.signIn, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(s.signInHow, color = Muted, fontSize = 9.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 26.dp))
+    }
+}
+
+@Composable
+fun PasswordLogin(a: Auth.Password, s: Strings) {
+    val scope = rememberCoroutineScope()
+    var pw by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text(s.password, fontSize = 12.sp, textAlign = TextAlign.Center)
+        if (a.hint.isNotEmpty()) Text(a.hint, color = Muted, fontSize = 10.sp)
+        if (a.wrong) Text(s.wrongPassword, color = Color(0xFFE86F6F), fontSize = 11.sp)
+        Box(Modifier.padding(vertical = 8.dp).clip(RoundedCornerShape(10.dp)).background(Card).padding(10.dp)) {
+            BasicTextField(pw, { pw = it }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                textStyle = TextStyle(color = Color.White, fontSize = 16.sp), cursorBrush = SolidColor(Accent), modifier = Modifier.fillMaxSize())
+        }
+        Chip(onClick = { scope.launch { Tg.password(pw) } }, label = { Text(s.ok) }, colors = ChipDefaults.primaryChipColors(backgroundColor = Accent))
+    }
+}
+
+@Composable
+fun Library(s: Strings) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
+    var goingBack by remember { mutableStateOf(false) }
+    fun push(x: Screen) { goingBack = false; stack.add(x) }
+    fun pop() { if (stack.size > 1) { goingBack = true; stack.removeAt(stack.lastIndex) } }
+    BackHandler(enabled = stack.size > 1) { pop() }
+    var searching by remember { mutableStateOf(false) }
+
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == Activity.RESULT_OK) {
+            val q = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!q.isNullOrBlank()) scope.launch {
+                searching = true
+                val res = try { Tg.search(q) } catch (_: Exception) { emptyList() }
+                searching = false
+                push(Screen.Files("\"$q\"", 0, preset = res))
+            }
+        }
+    }
+    val onSearch = { speech.launch(voiceIntent()) }
+
+    if (searching) { CircularProgressIndicator(Modifier.fillMaxSize().padding(60.dp), indicatorColor = Accent); return }
+    AnimatedContent(
+        targetState = stack.last(),
+        transitionSpec = {
+            if (goingBack) (slideInHorizontally(tween(260)) { -it / 3 } + fadeIn(tween(260))) togetherWith (slideOutHorizontally(tween(260)) { it } + fadeOut(tween(200)))
+            else (slideInHorizontally(tween(260)) { it } + fadeIn(tween(260))) togetherWith (slideOutHorizontally(tween(260)) { -it / 3 } + fadeOut(tween(200)))
+        },
+        label = "screens",
+    ) { screen ->
+        when (screen) {
+            is Screen.Home -> HomePager(Tg.groups, s, onSearch,
+                onOpen = { g -> if (g.kids) push(Screen.Kids(g.key, g.title)) else push(Screen.Files(g.title, g.chatId)) },
+                onSignOut = { Tg.signOut() })
+            is Screen.Kids -> KidsList(screen, Tg.groups.filter { it.parent == screen.parent }) { g -> push(Screen.Files(g.title, g.chatId)) }
+            is Screen.Files -> FileList(screen, s, onSearch) { push(Screen.Detail(it)) }
+            is Screen.Detail -> Detail(screen.file, s) { push(Screen.Share(screen.file)) }
+            is Screen.Share -> ShareList(screen.file, s)
         }
     }
 }
@@ -188,33 +219,64 @@ private fun logoRes(name: String?): Int? {
     return if (id == 0) null else id
 }
 
+/** Categories stacked vertically: swipe or turn the crown/bezel and each one snaps into place with a small springy "magnet". */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomePager(groups: List<Group>, s: Strings, onSearch: () -> Unit, onOpen: (Group) -> Unit) {
+fun HomePager(groups: List<Group>, s: Strings, onSearch: () -> Unit, onOpen: (Group) -> Unit, onSignOut: () -> Unit) {
     val top = groups.filter { it.parent == null }
-    val pager = rememberPagerState { top.size + 1 }
+    val total = top.size + 2 // search, categories, sign out
+    val pager = rememberPagerState { total }
+    val scope = rememberCoroutineScope()
+    val focus = remember { FocusRequester() }
+    val snap = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+    val fling = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = snap)
+    var lastTick = remember { 0L }
+    LaunchedEffect(Unit) { try { focus.requestFocus() } catch (_: Exception) {} }
     Box(Modifier.fillMaxSize()) {
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+        VerticalPager(
+            state = pager, flingBehavior = fling,
+            modifier = Modifier.fillMaxSize()
+                .onRotaryScrollEvent { ev ->
+                    val now = System.currentTimeMillis()
+                    if (now - lastTick > 140) {
+                        lastTick = now
+                        val to = (pager.currentPage + if (ev.verticalScrollPixels > 0) 1 else -1).coerceIn(0, total - 1)
+                        scope.launch { pager.animateScrollToPage(to, animationSpec = snap) }
+                    }
+                    true
+                }
+                .focusRequester(focus).focusable(),
+        ) { page ->
             val offset = abs((pager.currentPage - page) + pager.currentPageOffsetFraction)
+            val g = top.getOrNull(page - 1)
             Column(
-                Modifier.fillMaxSize().scale(1f - offset * 0.18f).alpha(1f - offset * 0.6f)
-                    .clickable { if (page == 0) onSearch() else onOpen(top[page - 1]) },
+                Modifier.fillMaxSize().scale(1f - offset * 0.2f).alpha(1f - offset * 0.65f)
+                    .combinedClickable(
+                        onClick = { when { page == 0 -> onSearch(); g != null -> onOpen(g); else -> onSignOut() } },
+                        onLongClick = onSearch,
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
-                if (page == 0) {
-                    Text("🔍", fontSize = 40.sp)
-                    Text(s.search, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp))
-                    Text(s.searchHint, color = Muted, fontSize = 12.sp)
-                } else {
-                    val g = top[page - 1]
-                    Text(emojiFor(g.key), fontSize = 40.sp)
-                    Text(g.title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 16.dp, end = 16.dp))
-                    Text(if (g.kids) "›" else "${g.count} ${s.files}", color = Muted, fontSize = 12.sp)
+                when {
+                    page == 0 -> {
+                        Text("🔍", fontSize = 40.sp)
+                        Text(s.search, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp))
+                        Text(s.searchHint, color = Muted, fontSize = 12.sp)
+                    }
+                    g != null -> {
+                        Text(emojiFor(g.key), fontSize = 40.sp)
+                        Text(g.title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, start = 16.dp, end = 16.dp))
+                        if (g.kids) Text("›", color = Muted, fontSize = 14.sp)
+                    }
+                    else -> {
+                        Text("⎋", fontSize = 34.sp)
+                        Text(s.signOut, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+                    }
                 }
             }
         }
-        // page dots
-        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            val total = top.size + 1
+        // position dots, on the right edge because the pages move up and down
+        Column(Modifier.align(Alignment.CenterEnd).padding(end = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             val from = (pager.currentPage - 3).coerceAtLeast(0)
             val to = (from + 6).coerceAtMost(total - 1)
             for (i in from..to) {
@@ -234,7 +296,6 @@ fun KidsList(screen: Screen.Kids, kids: List<Group>, onOpen: (Group) -> Unit) {
             Chip(
                 onClick = { onOpen(g) },
                 label = { Text(g.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                secondaryLabel = { Text("${g.count}", color = Muted) },
                 icon = if (logo != null) ({ Image(painterResource(logo), null, Modifier.size(26.dp), contentScale = ContentScale.Fit) }) else null,
                 colors = ChipDefaults.chipColors(backgroundColor = Card),
                 modifier = Modifier.fillMaxSize(),
@@ -244,10 +305,10 @@ fun KidsList(screen: Screen.Kids, kids: List<Group>, onOpen: (Group) -> Unit) {
 }
 
 @Composable
-fun FileList(screen: Screen.Files, s: Strings, onOpen: (WFile) -> Unit) {
-    val ctx = LocalContext.current
+fun FileList(screen: Screen.Files, s: Strings, onSearch: () -> Unit, onOpen: (WFile) -> Unit) {
     var files by remember { mutableStateOf(screen.preset ?: emptyList()) }
-    var total by remember { mutableStateOf(screen.preset?.size ?: 0) }
+    var next by remember { mutableStateOf(0L) }
+    var done by remember { mutableStateOf(screen.preset != null) }
     var busy by remember { mutableStateOf(screen.preset == null) }
     val scope = rememberCoroutineScope()
 
@@ -255,10 +316,11 @@ fun FileList(screen: Screen.Files, s: Strings, onOpen: (WFile) -> Unit) {
         busy = true
         scope.launch {
             try {
-                val r = PhoneLink.request(ctx, "files") { put("c", screen.chat); put("kids", screen.kids); put("off", files.size) }
-                files = files + r.optJSONArray("files").wfiles()
-                total = r.optInt("total")
-            } catch (_: Exception) { }
+                val p = Tg.page(screen.chat, next)
+                files = files + p.files
+                next = p.next
+                done = p.done
+            } catch (_: Exception) { done = true }
             busy = false
         }
     }
@@ -266,6 +328,7 @@ fun FileList(screen: Screen.Files, s: Strings, onOpen: (WFile) -> Unit) {
 
     ScalingLazyColumn(Modifier.fillMaxSize()) {
         item { Text(screen.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 4.dp)) }
+        item { Chip(onClick = onSearch, label = { Text("🔍 ${s.search}") }, colors = ChipDefaults.secondaryChipColors(), modifier = Modifier.fillMaxSize()) }
         if (files.isEmpty() && !busy) item { Text(s.empty, color = Muted) }
         items(files) { f ->
             Chip(
@@ -277,37 +340,34 @@ fun FileList(screen: Screen.Files, s: Strings, onOpen: (WFile) -> Unit) {
             )
         }
         if (busy) item { CircularProgressIndicator(Modifier.size(24.dp), indicatorColor = Accent) }
-        else if (screen.preset == null && files.size < total) item { Chip(onClick = { loadMore() }, label = { Text(s.more) }, colors = ChipDefaults.secondaryChipColors()) }
+        else if (screen.preset == null && !done) item { Chip(onClick = { loadMore() }, label = { Text(s.more) }, colors = ChipDefaults.secondaryChipColors()) }
     }
 }
 
 @Composable
-fun Detail(f: WFile, s: Strings, canShare: Boolean, onShare: () -> Unit) {
+fun Detail(f: WFile, s: Strings, onShare: () -> Unit) {
     ScalingLazyColumn(Modifier.fillMaxSize()) {
         item { Text(f.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp)) }
         item { Text("${sizeText(f.size)} · ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(f.date * 1000))}", color = Muted, fontSize = 12.sp) }
         item {
-            Chip(onClick = onShare, enabled = canShare, label = { Text(s.share) },
-                secondaryLabel = if (!canShare) ({ Text(s.noFavs, fontSize = 10.sp) }) else null,
+            Chip(onClick = onShare, label = { Text(s.share) },
                 colors = ChipDefaults.primaryChipColors(backgroundColor = Accent), modifier = Modifier.padding(top = 8.dp))
         }
     }
 }
 
 @Composable
-fun ShareList(f: WFile, recent: List<Contact>, s: Strings, onDone: () -> Unit) {
-    val ctx = LocalContext.current
+fun ShareList(f: WFile, s: Strings) {
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
     var searching by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf<List<Contact>>(emptyList()) }
     var query by remember { mutableStateOf("") }
+    val recent = remember { Tg.recent() }
 
     fun lookup(q: String) {
         query = q
-        scope.launch {
-            found = try { PhoneLink.request(ctx, "csearch") { put("q", q) }.optJSONArray("contacts").contacts() } catch (_: Exception) { emptyList() }
-        }
+        scope.launch { found = try { Tg.findContacts(q) } catch (_: Exception) { emptyList() } }
     }
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         if (r.resultCode == Activity.RESULT_OK) {
@@ -317,24 +377,14 @@ fun ShareList(f: WFile, recent: List<Contact>, s: Strings, onDone: () -> Unit) {
     }
     fun send(c: Contact) {
         scope.launch {
-            status = try {
-                val r = PhoneLink.request(ctx, "share") { put("c", f.chat); put("i", f.id); put("to", c.id) }
-                if (r.optBoolean("live")) "${s.sent} ✓" else s.finishOnPhone
-            } catch (_: Exception) { s.noPhone }
+            status = try { Tg.send(f, c.id); "${s.sent} ✓ ${c.name}" } catch (_: Exception) { s.noPhone }
         }
     }
-    @Composable
-    fun row(c: Contact) = Chip(
-        onClick = { send(c) },
-        label = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors = ChipDefaults.chipColors(backgroundColor = Card),
-        modifier = Modifier.fillMaxSize(),
-    )
     ScalingLazyColumn(Modifier.fillMaxSize()) {
         item { Text(if (searching) s.allContacts else s.share, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
         if (status != null) item { Text(status!!, color = Accent, textAlign = TextAlign.Center, fontSize = 13.sp, modifier = Modifier.padding(8.dp)) }
         if (!searching) {
-            items(recent) { c -> row(c) }
+            items(recent) { c -> ContactChip(c) { send(c) } }
             item {
                 Chip(onClick = { searching = true; lookup("") }, label = { Text(s.allContacts) },
                     colors = ChipDefaults.primaryChipColors(backgroundColor = Accent), modifier = Modifier.fillMaxSize())
@@ -342,12 +392,20 @@ fun ShareList(f: WFile, recent: List<Contact>, s: Strings, onDone: () -> Unit) {
         } else {
             item {
                 Chip(
-                    onClick = { speech.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) },
+                    onClick = { speech.launch(voiceIntent()) },
                     label = { Text(s.searchContacts) },
                     secondaryLabel = { Text(if (query.isEmpty()) s.searchHint else "\"$query\"", fontSize = 11.sp) },
                     colors = ChipDefaults.primaryChipColors(backgroundColor = Accent), modifier = Modifier.fillMaxSize())
             }
-            items(found) { c -> row(c) }
+            items(found) { c -> ContactChip(c) { send(c) } }
         }
     }
 }
+
+@Composable
+private fun ContactChip(c: Contact, onClick: () -> Unit) = Chip(
+    onClick = onClick,
+    label = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+    colors = ChipDefaults.chipColors(backgroundColor = Card),
+    modifier = Modifier.fillMaxSize(),
+)
