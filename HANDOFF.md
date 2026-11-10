@@ -48,7 +48,9 @@ APKs and installers, with step-by-step instructions. English + Spanish UI.
   app lock, duplicate finder, ROM box art (libretro thumbnails), TV mode, optional encryption, favorites/collections,
   splitting files over 2 GB (keep OFF for now).
 
-## NEXT UPDATE (Monday) — the user's list, saved 2026-11-06, nothing built yet
+## STATUS 2026-11-10: 0.9.0, 0.9.1, 0.10.0 built (Windows tray/autostart/T: diagnostics, Audio/Docs, APKs by console, console logos, thumbnails, program isolation).
+Still open: confirm tray + Start with Windows + T: drive on the user's PC (ask for desktop.log in app support folder); 0.11.0 = Android storage provider (DocumentsProvider) + Wear OS companion (Data Layer via phone app, no Telegram session); NuORDER Client integration happens in its own chat using tools/tirso_upload.py + the program setup file.
+## (original list, 2026-11-06)
 1. Two new libraries/categories: **Audio** and **Documents** (channels "TD - Audio", "TD - Documents"; route mp3/m4a/flac/wav/ogg/opus… and pdf/docx/xlsx/pptx/txt/epub… there).
 2. **Fix the upload-rule toggles** (Wi-Fi only / charging / quiet hours): they don't work properly.
 3. **Subcategories for Games (APKs)**, like ROMs: one channel per console (ties in with the "TD - <Console> APKs" channels).

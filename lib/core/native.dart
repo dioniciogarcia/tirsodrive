@@ -239,6 +239,17 @@ class NativeBridge {
     }
   }
 
+  /// Android: grabs a frame from a video and saves it as a small JPEG. Returns (width, height) or null.
+  static Future<(int, int)?> videoThumb(String src, String out) async {
+    try {
+      final m = await _ch.invokeMethod<Map<dynamic, dynamic>>('videoThumb', {'src': src, 'out': out});
+      if (m == null) return null;
+      return ((m['w'] as num).toInt(), (m['h'] as num).toInt());
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<bool> isTv() async {
     if (!Platform.isAndroid) return false;
     try {

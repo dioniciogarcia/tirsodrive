@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
+
+import '../core/drive.dart';
 import '../core/strings.dart';
 
 class C {
@@ -250,6 +253,46 @@ class ConsoleLogo extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.25),
       ),
       child: Image.asset(asset, fit: BoxFit.contain, filterQuality: FilterQuality.medium, errorBuilder: (_, _, _) => SizedBox.shrink()),
+    );
+  }
+}
+
+
+/// Photo/video preview. Shows the file-type badge until the preview arrives (or if there isn't one).
+class FileThumb extends StatefulWidget {
+  final DriveFile file;
+  final Color color;
+  final double size;
+  const FileThumb({super.key, required this.file, required this.color, this.size = 52});
+  @override
+  State<FileThumb> createState() => _FileThumbState();
+}
+
+class _FileThumbState extends State<FileThumb> {
+  Uint8List? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytes = Drive.current?.cachedThumb(widget.file);
+    if (_bytes == null && widget.file.previewable) {
+      Drive.current?.thumbBytes(widget.file).then((b) {
+        if (mounted && b != null) setState(() => _bytes = b);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final f = widget.file;
+    final badge = ExtBadge(f.ext, color: widget.color, size: widget.size);
+    if (_bytes == null) return badge;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(widget.size * 0.2),
+      child: Stack(alignment: Alignment.center, children: [
+        Image.memory(_bytes!, width: widget.size, height: widget.size, fit: BoxFit.cover, cacheWidth: (widget.size * 3).round(), gaplessPlayback: true, errorBuilder: (_, _, _) => badge),
+        if (f.mime.startsWith('video/')) Container(width: 20, height: 20, decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: Icon(Icons.play_arrow, size: 15, color: Colors.white)),
+      ]),
     );
   }
 }

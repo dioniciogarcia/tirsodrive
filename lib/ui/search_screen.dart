@@ -44,6 +44,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   bool _matchWhere(DriveFile f) {
     if (_where == 'all') return true;
+    if (_where.startsWith('prog:')) return true; // the list is already that program's files
     final cat = d.channelById(f.chatId)?.category;
     if (_where == 'roms') return cat?.isRom ?? false;
     if (_where == 'apks') return (cat?.isApk ?? false) || cat?.key == 'games';
@@ -130,7 +131,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListenableBuilder(
       listenable: d,
       builder: (context, _) {
-        final all = d.allFiles;
+        final all = _where.startsWith('prog:') ? d.programFiles(_where.substring(5)) : d.allFiles;
         final inPlace = all.where(_matchWhere).toList();
         final exts = <String, int>{};
         for (final f in inPlace) {
@@ -154,6 +155,8 @@ class _SearchScreenState extends State<SearchScreen> {
           for (final c in apkCategories)
             if (d.channelForKey(c.key) != null) ('key:${c.key}', c.full(appLang)),
           for (final ch in d.customChannels) ('chat:${ch.chatId}', ch.display),
+          for (final pr in d.programs.list)
+            if (pr.isolated) ('prog:${pr.name}', '🔒 ${pr.name}'),
         ];
         if (!whereOptions.any((o) => o.$1 == _where)) _where = 'all';
 

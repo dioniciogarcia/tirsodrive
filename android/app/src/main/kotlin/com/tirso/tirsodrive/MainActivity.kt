@@ -97,6 +97,28 @@ class MainActivity : FlutterFragmentActivity() {
                     } catch (_: Exception) { }
                     result.success(mapOf("wifi" to wifi, "charging" to charging))
                 }
+                "videoThumb" -> {
+                    val src = call.argument<String>("src")!!
+                    val out = call.argument<String>("out")!!
+                    Thread {
+                        var res: Map<String, Int>? = null
+                        try {
+                            val mmr = android.media.MediaMetadataRetriever()
+                            mmr.setDataSource(src)
+                            val dur = (mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION) ?: "0").toLongOrNull() ?: 0L
+                            var bmp = mmr.getFrameAtTime(minOf(dur * 1000 / 10, 3_000_000L), android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                ?: mmr.getFrameAtTime(0)
+                            mmr.release()
+                            if (bmp != null) {
+                                val scale = 320f / maxOf(bmp.width, bmp.height)
+                                if (scale < 1f) bmp = android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1), true)
+                                java.io.FileOutputStream(out).use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 78, it) }
+                                res = mapOf("w" to bmp.width, "h" to bmp.height)
+                            }
+                        } catch (_: Exception) { }
+                        runOnUiThread { result.success(res) }
+                    }.start()
+                }
                 "isTv" -> {
                     val ui = getSystemService(android.content.Context.UI_MODE_SERVICE) as android.app.UiModeManager
                     result.success(ui.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||

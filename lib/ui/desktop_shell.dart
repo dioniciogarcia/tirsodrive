@@ -135,6 +135,10 @@ class _DesktopShellState extends State<DesktopShell> {
             IconButton(tooltip: t('new_channel'), onPressed: () => showNewChannelDialog(context, d), icon: Icon(Icons.add, size: 18, color: C.accentSoft)),
           ]),
           for (final ch in d.customChannels) _navItem('chat:${ch.chatId}', ch.display, C.label),
+          for (final pr in d.programs.list.where((x) => x.isolated)) ...[
+            _label('🔒 ${pr.name}'),
+            for (final e in pr.channels.entries) _navItem('chat:${e.value}', e.key, C.label),
+          ],
           SizedBox(height: 14),
           Divider(),
           SizedBox(height: 8),

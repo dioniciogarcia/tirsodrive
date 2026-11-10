@@ -31,6 +31,52 @@ class ProgramsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _connectOther(BuildContext context) async {
+    final name = TextEditingController();
+    final chans = TextEditingController();
+    var isolate = true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(t('prog_other_title'), style: TextStyle(fontFamily: displayFont)),
+          content: SizedBox(
+            width: 440,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(t('prog_other_body'), style: TextStyle(color: C.soft, height: 1.45, fontSize: 13)),
+              SizedBox(height: 12),
+              TextField(controller: name, decoration: InputDecoration(labelText: t('prog_name'))),
+              SizedBox(height: 10),
+              TextField(controller: chans, decoration: InputDecoration(labelText: t('prog_chans'), helperText: t('prog_chans_help'))),
+              SizedBox(height: 6),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: isolate,
+                onChanged: (v) => setS(() => isolate = v),
+                title: Text(t('prog_isolate'), style: TextStyle(fontSize: 14)),
+                subtitle: Text(t('prog_isolate_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
+            FilledButton(style: FilledButton.styleFrom(minimumSize: Size(96, 44)), onPressed: () => Navigator.pop(ctx, name.text.trim().isNotEmpty), child: Text(t('prog_connect'))),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final pname = name.text.trim();
+    final names = chans.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final map = names.isEmpty ? {pname: 'TD - $pname'} : {for (final n in names) n: names.length == 1 ? 'TD - $pname - $n' : 'TD - $pname - $n'};
+    try {
+      final where = await drive.programs.connectProgram(pname, map, isolated: isolate);
+      if (context.mounted && where != null) snack(context, t('prog_done', {'p': where}));
+    } catch (e) {
+      if (context.mounted) snack(context, t('err_generic', {'e': e.toString().replaceFirst('Exception: ', '')}));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -68,14 +114,14 @@ class ProgramsScreen extends StatelessWidget {
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(prog.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                            Text('@${prog.botUsername}', style: TextStyle(color: C.muted, fontSize: 12)),
+                            Text('@${prog.botUsername}${prog.isolated ? '  ·  🔒 ${t('prog_separate')}' : ''}', style: TextStyle(color: C.muted, fontSize: 12)),
                           ]),
                         ),
                       ]),
                       SizedBox(height: 10),
                       Text(t('prog_channels'), style: TextStyle(color: C.muted, fontSize: 12)),
                       SizedBox(height: 4),
-                      Wrap(spacing: 6, runSpacing: 6, children: [for (final c in prog.channels.keys) Chip(label: Text('TD - $c APKs', style: TextStyle(fontSize: 12)))]),
+                      Wrap(spacing: 6, runSpacing: 6, children: [for (final c in prog.channels.keys) Chip(label: Text(prog.isolated ? c : 'TD - $c APKs', style: TextStyle(fontSize: 12)))]),
                       SizedBox(height: 10),
                       Row(children: [
                         OutlinedButton.icon(
@@ -94,6 +140,10 @@ class ProgramsScreen extends StatelessWidget {
                 ),
               if (!p.busy && !p.list.any((x) => x.name == 'Tirso Compiler'))
                 FilledButton.icon(onPressed: () => _connect(context), icon: Icon(Icons.link), label: Text(t('prog_connect_tirso'))),
+              if (!p.busy) ...[
+                SizedBox(height: 10),
+                OutlinedButton.icon(onPressed: () => _connectOther(context), icon: Icon(Icons.add_link), label: Text(t('prog_connect_other'))),
+              ],
               SizedBox(height: 16),
               Text(t('prog_note'), style: TextStyle(color: C.label, fontSize: 12, height: 1.4)),
             ],

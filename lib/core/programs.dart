@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'categories.dart' show channelPrefix;
 import 'drive.dart';
 import 'native.dart';
 import 'strings.dart';
@@ -17,16 +18,18 @@ class ConnectedProgram {
   final String botUsername;
   final int botId;
   final String token;
-  final Map<String, int> channels; // console → chat id
-  ConnectedProgram(this.name, this.botUsername, this.botId, this.token, this.channels);
+  final Map<String, int> channels; // console (or channel name) → chat id
+  final bool isolated; // work/other programs: their files stay out of personal search, favorites and duplicates
+  ConnectedProgram(this.name, this.botUsername, this.botId, this.token, this.channels, {this.isolated = false});
 
-  Map<String, dynamic> toJson() => {'name': name, 'bot': botUsername, 'botId': botId, 'token': token, 'channels': channels};
+  Map<String, dynamic> toJson() => {'name': name, 'bot': botUsername, 'botId': botId, 'token': token, 'channels': channels, 'isolated': isolated};
   static ConnectedProgram fromJson(Map<String, dynamic> m) => ConnectedProgram(
         m['name'] as String,
         m['bot'] as String,
         (m['botId'] as num).toInt(),
         m['token'] as String,
         (m['channels'] as Map<String, dynamic>).map((k, v) => MapEntry(k, (v as num).toInt())),
+        isolated: m['isolated'] == true,
       );
 }
 
@@ -81,8 +84,12 @@ class Programs {
     }
   }
 
-  /// Creates the bot, the channels, gives the bot access to only those channels, and saves the setup file.
-  Future<String?> connectTirso() async {
+  /// Tirso Compiler: one APK channel per console ("TD - N64 APKs", …).
+  Future<String?> connectTirso() => connectProgram('Tirso Compiler', {for (final c in tirsoConsoles) c: 'TD - $c APKs'}, isolated: false);
+
+  /// Any other program (for example NuORDER Client): its own bot and its own channel(s), kept apart from your
+  /// personal files when [isolated] is true. [channels] maps a channel name to its full Telegram title.
+  Future<String?> connectProgram(String name, Map<String, String> channels, {required bool isolated}) async {
     if (busy) return null;
     busy = true;
     try {
@@ -92,12 +99,14 @@ class Programs {
       await d.td.call({'@type': 'openChat', 'chat_id': bfId});
       var reply = await _ask(bfId, '/newbot');
       if (!reply.toLowerCase().contains('name')) throw Exception(reply);
-      reply = await _ask(bfId, 'Tirso Compiler (TirsoDrive)');
+      reply = await _ask(bfId, '$name (TirsoDrive)');
       String? token;
       String username = '';
       final rnd = Random.secure();
+      final slug = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final prefix = slug.isEmpty ? 'td' : slug.substring(0, min(slug.length, 12));
       for (var attempt = 0; attempt < 4 && token == null; attempt++) {
-        username = 'tirso_${List.generate(6, (_) => 'abcdefghijkmnpqrstuvwxyz23456789'[rnd.nextInt(32)]).join()}_bot';
+        username = '${prefix}_${List.generate(6, (_) => 'abcdefghijkmnpqrstuvwxyz23456789'[rnd.nextInt(32)]).join()}_bot';
         reply = await _ask(bfId, username);
         token = RegExp(r'(\d{6,}:[A-Za-z0-9_-]{30,})').firstMatch(reply)?.group(1);
         if (token == null && !reply.toLowerCase().contains('taken') && !reply.toLowerCase().contains('invalid')) throw Exception(reply);
@@ -106,13 +115,13 @@ class Programs {
       final botId = int.parse(token.split(':').first);
       await d.td.call({'@type': 'searchPublicChat', 'username': username}); // so Telegram knows the bot
 
-      final channels = <String, int>{};
-      for (final console in tirsoConsoles) {
-        _step(t('prog_step_channel', {'c': console}));
-        final title = 'TD - $console APKs';
+      final made = <String, int>{};
+      for (final e in channels.entries) {
+        _step(t('prog_step_channel', {'c': e.value}));
+        final title = e.value;
         var existing = d.channels.where((c) => c.title.toLowerCase() == title.toLowerCase());
         if (existing.isEmpty) {
-          final err = await d.createCustomChannel('$console APKs');
+          final err = await d.createCustomChannel(title.startsWith(channelPrefix) ? title.substring(channelPrefix.length) : title);
           if (err != null) throw Exception(err);
           existing = d.channels.where((c) => c.title.toLowerCase() == title.toLowerCase());
         }
@@ -133,9 +142,9 @@ class Programs {
             },
           },
         });
-        channels[console] = chatId;
+        made[e.key] = chatId;
       }
-      final p = ConnectedProgram('Tirso Compiler', username, botId, token, channels);
+      final p = ConnectedProgram(name, username, botId, token, made, isolated: isolated);
       list.removeWhere((x) => x.name == p.name);
       list.add(p);
       _step(t('prog_step_file'));
@@ -151,6 +160,8 @@ class Programs {
     }
   }
 
+  static String fileSlug(String name) => name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+
   /// Writes the setup file Tirso Compiler reads (bot token + one channel per console).
   Future<String> exportConfig(ConnectedProgram p) async {
     final cfg = const JsonEncoder.withIndent('  ').convert({
@@ -160,12 +171,14 @@ class Programs {
       'bot_username': p.botUsername,
       'bot_token': p.token,
       'channels': p.channels, // console → Telegram chat id
+      'separate_from_personal_files': p.isolated,
       'naming': 'TV builds: add " TV" to the APK file name only, e.g. "Super Mario 64 TV.apk"; never to the app name.',
       'max_file_bytes': d.maxBytes,
     });
-    final tmp = File('${Directory.systemTemp.path}${Platform.pathSeparator}tirso-compiler-telegram.json');
+    final fname = '${fileSlug(p.name)}-telegram.json';
+    final tmp = File('${Directory.systemTemp.path}${Platform.pathSeparator}$fname');
     await tmp.writeAsString(cfg);
-    return NativeBridge.saveToDownloads(tmp.path, 'tirso-compiler-telegram.json', 'application/json');
+    return NativeBridge.saveToDownloads(tmp.path, fname, 'application/json');
   }
 
   /// Ends the program's access immediately: the bot is removed from all its channels. Files stay.

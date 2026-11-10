@@ -1,11 +1,11 @@
-# TirsoDrive — Android 0.8.0 / Windows 0.8.0
+# TirsoDrive — Android 0.10.0 / Windows 0.10.0
 
 Your Telegram API ID and hash are built into this version, so there's no setup screen.
 Just install it and sign in.
 
 ## Step 1 — Install the APK
 
-1. Copy `TirsoDrive-0.8.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
+1. Copy `TirsoDrive-0.10.0.apk` to the phone (USB cable, Google Drive, or Quick Share).
 2. Tap the file. If Android asks, allow **Install unknown apps** for the app you opened it with.
 3. Tap **Install**. If an older TirsoDrive is installed, this updates it and you stay signed in.
 
@@ -66,6 +66,11 @@ On Windows:
   signed with this same key, or Android won't install it over the old version.
 
 ## Changes
+
+- **0.10.0:** **Previews:** photos and videos show a small picture in file lists (new uploads carry one; older photos under 4 MB get one on demand; videos uploaded before this show the badge until re-uploaded; Windows makes previews for photos only).
+  **Connect another program** (Settings › Connected programs): its own bot + its own channel(s), and "Keep separate from my personal files" keeps them out of your search, favorites and duplicates (open them from "Programs" / the lock-marked sidebar section).
+- **0.9.1:** **Games (APKs) by console** (N64, GBA, DS, GameCube, Wii, PS1, PS2, PSP + "Other games"), **console logos**, tray/start-with-Windows hardening, and a diagnostic log (`desktop.log`) for the T: drive and tray.
+- **0.9.0:** Windows tray icon + status card, Start with Windows, close-to-tray, Audio and Documents libraries, status dot, theme keeps your screen, upload-rule switches fixed, TV search focus fix.
 
 - **0.8.0:** **Encryption** (Settings › Encryption): set a password, then turn on "Encrypt these files" when uploading with the + button / Back up a folder.
   Telegram only stores scrambled data; encrypted files show a 🔒 and are decrypted when you open, save or share them. Forget the password = the files can't be opened.

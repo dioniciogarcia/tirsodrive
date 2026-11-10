@@ -241,7 +241,7 @@ class FileRow extends StatelessWidget {
                 child: Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked, color: selected ? C.accent : C.label),
               ),
             if (artUrl == null)
-              ExtBadge(file.ext, color: color)
+              (file.previewable ? FileThumb(key: ValueKey(file.fileId), file: file, color: color) : ExtBadge(file.ext, color: color))
             else
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/categories.dart';
 import '../core/drive.dart';
+import '../core/programs.dart';
 import '../core/strings.dart';
 import 'channel_screen.dart';
 import 'extras_screens.dart';
@@ -131,6 +132,18 @@ class LibraryScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (drive.programs.list.any((x) => x.isolated)) ...[
+                    SizedBox(height: 22),
+                    SectionLabel(t('section_programs')),
+                    SizedBox(height: 4),
+                    for (final pr in drive.programs.list.where((x) => x.isolated))
+                      _Row(
+                        tag: 'PRG',
+                        title: pr.name,
+                        sub: '🔒 ${t('prog_separate')} · ${pr.channels.length}',
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProgramChannelsScreen(drive: drive, program: pr))),
+                      ),
+                  ],
                   SizedBox(height: 18),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     for (final (label, icon, color, page) in [
@@ -283,6 +296,31 @@ class ApksScreen extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The channels of one separate program (e.g. work files), opened on their own.
+class ProgramChannelsScreen extends StatelessWidget {
+  final Drive drive;
+  final ConnectedProgram program;
+  const ProgramChannelsScreen({super.key, required this.drive, required this.program});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(backgroundColor: C.bg, title: Text(program.name, style: TextStyle(fontFamily: displayFont))),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(18, 8, 18, 24),
+        children: [
+          for (final e in program.channels.entries)
+            _Row(
+              tag: 'PRG',
+              title: e.key,
+              sub: drive.channelById(e.value)?.title ?? '',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChannelScreen(drive: drive, chatId: e.value))),
+            ),
+        ],
       ),
     );
   }

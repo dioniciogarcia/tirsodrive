@@ -1,4 +1,5 @@
 // The heart of TirsoDrive: sign-in, channels, files and the transfer queue.
+import 'package:image/image.dart' as img;
 import 'desktop.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -23,7 +24,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.9.1';
+const String appVersion = '0.10.0';
 
 class DriveChannel {
   final int chatId;
@@ -47,6 +48,7 @@ class DriveFile {
   final int fileId;
   final int? originalMs;
   final String caption; // TirsoDrive's own caption (mtime=, name=, path=, ...)
+  final int? thumbId; // Telegram's preview image for this file, when it has one
   List<String> get _words => caption.split(RegExp(r'\s+'));
   bool get fav => _words.contains('fav');
   List<String> get collections => [
@@ -83,7 +85,9 @@ class DriveFile {
     required this.fileId,
     this.originalMs,
     this.caption = '',
+    this.thumbId,
   });
+  bool get previewable => !encrypted && (mime.startsWith('image/') || mime.startsWith('video/'));
   String get ext => extensionOf(name).toUpperCase();
 }
 
@@ -175,6 +179,9 @@ class Drive extends ChangeNotifier {
   late final SyncManager sync = SyncManager(this);
   late final StreamServer streamer = StreamServer(this);
   late final WebDavDrive webdav = WebDavDrive(this);
+  Drive() {
+    current = this;
+  }
   late final Programs programs = Programs(this);
   bool driveLetter = false; // Windows: show TirsoDrive as a drive letter
   late SharedPreferences _prefs;
@@ -708,7 +715,10 @@ class Drive extends ChangeNotifier {
     return out;
   }
 
-  List<DriveChannel> get customChannels => channels.where((c) => c.category == null && c.title.toLowerCase() != trashTitle.toLowerCase()).toList();
+  /// Chats that belong to a connected program kept apart from your personal files (work profile).
+  Set<int> get isolatedChats => {for (final p in programs.list) if (p.isolated) ...p.channels.values};
+
+  List<DriveChannel> get customChannels => channels.where((c) => c.category == null && c.title.toLowerCase() != trashTitle.toLowerCase() && !isolatedChats.contains(c.chatId)).toList();
 
   DriveChannel? channelForKey(String key) {
     final cat = categoryByKey(key);
@@ -783,18 +793,21 @@ class Drive extends ChangeNotifier {
     final c = m['content'] as Map<String, dynamic>? ?? {};
     final id = (m['id'] as num).toInt();
     Map<String, dynamic>? file;
+    Map<String, dynamic>? thumb;
     String name = '';
     String mime = '';
     switch (c['@type']) {
       case 'messageDocument':
         final d = c['document'] as Map<String, dynamic>;
         file = d['document'] as Map<String, dynamic>?;
+        thumb = d['thumbnail']?['file'] as Map<String, dynamic>?;
         name = (d['file_name'] ?? '').toString();
         mime = (d['mime_type'] ?? '').toString();
         break;
       case 'messageVideo':
         final v = c['video'] as Map<String, dynamic>;
         file = v['video'] as Map<String, dynamic>?;
+        thumb = v['thumbnail']?['file'] as Map<String, dynamic>?;
         name = (v['file_name'] ?? '').toString();
         mime = (v['mime_type'] ?? 'video/mp4').toString();
         if (name.isEmpty) name = 'video_$id.mp4';
@@ -814,6 +827,7 @@ class Drive extends ChangeNotifier {
       case 'messagePhoto':
         final sizes = (c['photo']?['sizes'] as List?) ?? [];
         if (sizes.isNotEmpty) file = (sizes.last as Map<String, dynamic>)['photo'] as Map<String, dynamic>?;
+        if (sizes.length > 1) thumb = (sizes.first as Map<String, dynamic>)['photo'] as Map<String, dynamic>?;
         name = 'photo_$id.jpg';
         mime = 'image/jpeg';
         break;
@@ -841,6 +855,7 @@ class Drive extends ChangeNotifier {
       fileId: (file['id'] as num).toInt(),
       originalMs: mt == null ? null : int.tryParse(mt.group(1)!),
       caption: caption,
+      thumbId: (thumb?['id'] as num?)?.toInt(),
     );
   }
 
@@ -1173,7 +1188,17 @@ class Drive extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<DriveFile> get allFiles => [for (final c in channels) if (c.title.toLowerCase() != trashTitle.toLowerCase()) ...?filesByChat[c.chatId]];
+  /// Your personal files (everything except the Trash and programs kept separate, such as work).
+  List<DriveFile> get allFiles {
+    final hidden = isolatedChats;
+    return [for (final c in channels) if (c.title.toLowerCase() != trashTitle.toLowerCase() && !hidden.contains(c.chatId)) ...?filesByChat[c.chatId]];
+  }
+
+  /// Files of one separate program (searched only when you choose that program).
+  List<DriveFile> programFiles(String name) {
+    final ids = programs.list.where((p) => p.name == name).expand((p) => p.channels.values).toSet();
+    return [for (final id in ids) ...?filesByChat[id]];
+  }
 
   // ---------------------------------------------------------------- sharing
 
@@ -1200,6 +1225,67 @@ class Drive extends ChangeNotifier {
     await dropLocal(go);
     cur.removeAll(go.map((e) => '$e'));
     await _prefs.setStringList('temp_files', cur.toList());
+  }
+
+  // ---------------------------------------------------------------- previews (thumbnails)
+
+  static Drive? current; // the running app's Drive, so small widgets can ask for previews
+  final Map<int, Uint8List?> _thumbCache = {}; // fileId → image bytes (null = none available)
+  final Map<int, Future<Uint8List?>> _thumbLoading = {};
+  int _thumbBusy = 0;
+
+  Uint8List? cachedThumb(DriveFile f) => _thumbCache[f.fileId];
+
+  /// A small preview for an image or video. Uses Telegram's thumbnail; for older photos that have none,
+  /// downloads the photo itself (only when it is small) and shrinks it. Nothing stays on the device.
+  Future<Uint8List?> thumbBytes(DriveFile f) {
+    if (_thumbCache.containsKey(f.fileId)) return Future.value(_thumbCache[f.fileId]);
+    return _thumbLoading.putIfAbsent(f.fileId, () => _loadThumb(f));
+  }
+
+  Future<Uint8List?> _loadThumb(DriveFile f) async {
+    while (_thumbBusy >= 4) {
+      await Future.delayed(const Duration(milliseconds: 120));
+    }
+    _thumbBusy++;
+    Uint8List? out;
+    try {
+      final id = f.thumbId ?? (f.mime.startsWith('image/') && f.size > 0 && f.size <= 4 * 1024 * 1024 ? f.fileId : null);
+      if (id != null) {
+        final r = await td.call({'@type': 'downloadFile', 'file_id': id, 'priority': 1, 'offset': 0, 'limit': 0, 'synchronous': true});
+        final path = r['local']?['path'] as String?;
+        if (path != null && path.isNotEmpty && r['local']?['is_downloading_completed'] == true) {
+          out = await File(path).readAsBytes();
+          if (id == f.fileId) await dropLocal([id]); // the full photo was only fetched to make a preview
+        }
+      }
+    } catch (_) {}
+    _thumbBusy--;
+    if (_thumbCache.length > 300) _thumbCache.remove(_thumbCache.keys.first);
+    _thumbCache[f.fileId] = out;
+    _thumbLoading.remove(f.fileId);
+    return out;
+  }
+
+  /// Makes a small JPEG preview to upload with a file (Telegram shows it as the file's thumbnail).
+  /// Returns null when the file isn't an image/video we can make one for.
+  Future<({String path, int w, int h})?> _makeUploadThumb(String srcPath, String name) async {
+    final ext = extensionOf(name);
+    final tmp = (await getTemporaryDirectory()).path;
+    final out = '$tmp${Platform.pathSeparator}thumb_${DateTime.now().microsecondsSinceEpoch}.jpg';
+    try {
+      if (const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}.contains(ext)) {
+        final r = await compute(_imageThumb, [srcPath, out]);
+        if (r == null) return null;
+        return (path: out, w: r[0], h: r[1]);
+      }
+      if (Platform.isAndroid && const {'mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', '3gp', 'ts', 'mpg', 'mpeg', 'wmv', 'flv'}.contains(ext)) {
+        final r = await NativeBridge.videoThumb(srcPath, out);
+        if (r == null) return null;
+        return (path: out, w: r.$1, h: r.$2);
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Downloads a file (through the normal queue, with progress) and returns where it is on this device.
@@ -1590,6 +1676,7 @@ class Drive extends ChangeNotifier {
       tr.status = TStatus.active;
       tr._lastTime = DateTime.now();
       notifyListeners();
+      final th = tr.encrypt ? null : await _makeUploadThumb(path, tr.name);
       final msg = await td.call({
         '@type': 'sendMessage',
         'chat_id': chatId,
@@ -1599,6 +1686,8 @@ class Drive extends ChangeNotifier {
           'document': {
             '@type': 'inputDocument',
             'document': {'@type': 'inputFileLocal', 'path': path},
+            if (th != null)
+              'thumbnail': {'@type': 'inputThumbnail', 'thumbnail': {'@type': 'inputFileLocal', 'path': th.path}, 'width': th.w, 'height': th.h},
             'disable_content_type_detection': true,
           },
           'caption': {'@type': 'formattedText', 'text': caption, 'entities': <dynamic>[]},
@@ -1789,3 +1878,13 @@ class Drive extends ChangeNotifier {
 }
 
 class _Cancelled implements Exception {}
+
+
+/// Runs in a background isolate: shrinks an image to a JPEG preview (max 320 px). Returns [width, height].
+List<int>? _imageThumb(List<String> a) {
+  final src = img.decodeImage(File(a[0]).readAsBytesSync());
+  if (src == null) return null;
+  final small = src.width >= src.height ? img.copyResize(src, width: src.width > 320 ? 320 : src.width) : img.copyResize(src, height: src.height > 320 ? 320 : src.height);
+  File(a[1]).writeAsBytesSync(img.encodeJpg(small, quality: 78));
+  return [small.width, small.height];
+}

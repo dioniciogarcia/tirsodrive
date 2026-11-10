@@ -9,7 +9,7 @@ Setup (once):
 Use (Tirso Compiler calls this after each build):
     python tirso_upload.py tirso-compiler-telegram.json "C:\\path\\Super Mario 64 TV.apk" N64
 
-Consoles: N64, DS, PSP, PS2, GameCube, Wii. Files up to 2 GB (4 GB if the setup file allows it).
+Consoles: N64, GBA, DS, GameCube, Wii, PS1, PS2, PSP (other programs: any channel name from their setup file). Files up to 2 GB (4 GB if the setup file allows it).
 TV builds: put " TV" only in the APK file name (e.g. "Super Mario 64 TV.apk"), never in the app name.
 """
 import json
