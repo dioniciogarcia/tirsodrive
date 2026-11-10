@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../core/desktop.dart';
 import '../core/drive.dart';
 import '../core/strings.dart';
 import '../core/webdav.dart';
@@ -206,6 +207,18 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   SizedBox(height: 24),
                 ],
+                if (drive.desktop != null) ...[
+                  SectionLabel(t('win_title')),
+                  const _AutostartSwitch(),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: drive.keepInTray,
+                    onChanged: drive.setKeepInTray,
+                    title: Text(t('win_tray'), style: TextStyle(fontSize: 14)),
+                    subtitle: Text(t('win_tray_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
+                  ),
+                  SizedBox(height: 24),
+                ],
                 SectionLabel(t('lock_title_set')),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -262,6 +275,39 @@ class SettingsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// "Start with Windows" switch; keeps its own state because the setting lives in the Windows registry.
+class _AutostartSwitch extends StatefulWidget {
+  const _AutostartSwitch();
+  @override
+  State<_AutostartSwitch> createState() => _AutostartSwitchState();
+}
+
+class _AutostartSwitchState extends State<_AutostartSwitch> {
+  bool _on = false;
+
+  @override
+  void initState() {
+    super.initState();
+    DesktopHost.autostartEnabled().then((v) {
+      if (mounted) setState(() => _on = v);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      value: _on,
+      onChanged: (v) async {
+        setState(() => _on = v);
+        await DesktopHost.setAutostart(v);
+      },
+      title: Text(t('win_autostart'), style: TextStyle(fontSize: 14)),
+      subtitle: Text(t('win_autostart_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
     );
   }
 }

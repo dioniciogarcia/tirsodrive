@@ -11,7 +11,12 @@ void main() {
     expect(routeFile('IMG_2041.jpg'), 'photos');
     expect(routeFile('Super Mario 64 TV.apk'), 'games');
     expect(routeFile('saves.7z'), 'compressed');
-    expect(routeFile('notes.txt'), 'other');
+    expect(routeFile('notes.txt'), 'docs');
+    expect(routeFile('Report.PDF'), 'docs');
+    expect(routeFile('song.flac'), 'audio');
+    expect(routeFile('mix.MP3'), 'audio');
+    expect(routeFile('tool.exe'), 'other');
+    expect(routeFile('Sonic.md'), 'rom_genesis'); // Mega Drive stays a ROM
     expect(routeFile('noextension'), 'other');
     expect(routeFile('God of War.iso'), isNull); // user picks console
     expect(routeFile('Metroid Prime.rvz'), isNull);

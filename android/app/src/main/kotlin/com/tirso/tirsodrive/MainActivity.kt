@@ -86,7 +86,9 @@ class MainActivity : FlutterFragmentActivity() {
                         val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
                         val caps = cm.getNetworkCapabilities(cm.activeNetwork)
                         wifi = caps != null && (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
-                            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET))
+                            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) ||
+                            (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) &&
+                                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)))
                     } catch (_: Exception) { }
                     var charging: Boolean? = null
                     try {

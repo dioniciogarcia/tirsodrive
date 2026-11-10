@@ -1,5 +1,6 @@
 // Global search across every TirsoDrive channel, with filters and sorting.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/categories.dart';
 import '../core/drive.dart';
@@ -155,9 +156,37 @@ class _SearchScreenState extends State<SearchScreen> {
         final body = ListView(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 40),
           children: [
-            TextField(
+            // TV remote: a text field swallows the arrow keys, so Down/Up are handed to the focus system
+            // and the field never traps the pointer. "Done/Search" on the keyboard also moves on to the results.
+            Focus(
+              canRequestFocus: false,
+              skipTraversal: true,
+              onKeyEvent: (node, ev) {
+                if (ev is! KeyDownEvent) return KeyEventResult.ignored;
+                final k = ev.logicalKey;
+                if (k == LogicalKeyboardKey.arrowDown) {
+                  FocusScope.of(context).focusInDirection(TraversalDirection.down);
+                  return KeyEventResult.handled;
+                }
+                if (k == LogicalKeyboardKey.arrowUp) {
+                  FocusScope.of(context).focusInDirection(TraversalDirection.up);
+                  return KeyEventResult.handled;
+                }
+                if (d.isTv && k == LogicalKeyboardKey.arrowLeft && _q.selection.baseOffset <= 0) {
+                  FocusScope.of(context).focusInDirection(TraversalDirection.left);
+                  return KeyEventResult.handled;
+                }
+                if (d.isTv && k == LogicalKeyboardKey.arrowRight && _q.selection.baseOffset >= _q.text.length) {
+                  FocusScope.of(context).focusInDirection(TraversalDirection.right);
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: TextField(
               controller: _q,
-              autofocus: true,
+              autofocus: !d.isTv, // on a TV the keyboard opens only when the field is selected
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => FocusScope.of(context).focusInDirection(TraversalDirection.down),
               style: TextStyle(fontSize: 16),
               decoration: InputDecoration(
                 prefixIcon: Icon(Icons.search),
@@ -167,6 +196,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     : IconButton(tooltip: t('cancel'), onPressed: () => setState(_q.clear), icon: Icon(Icons.close)),
               ),
               onChanged: (_) => setState(() {}),
+            ),
             ),
             SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [

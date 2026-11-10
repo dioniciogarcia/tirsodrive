@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'core/desktop.dart';
 import 'core/drive.dart';
 import 'core/strings.dart';
 import 'ui/desktop_shell.dart';
+import 'ui/tray_card.dart';
 import 'ui/library_screen.dart';
 import 'ui/lock_screen.dart';
 import 'ui/login_screen.dart';
@@ -12,10 +14,14 @@ import 'ui/settings_screen.dart';
 import 'ui/theme.dart';
 import 'ui/transfers_screen.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final drive = Drive();
   await drive.loadTheme(); // before the first frame, so there is no flash of the wrong theme
+  if (DesktopHost.supported) {
+    drive.desktop = DesktopHost(drive);
+    await drive.desktop!.init(startHidden: args.contains('--minimized'));
+  }
   runApp(TirsoDriveApp(drive: drive));
   await drive.init();
 }
@@ -28,12 +34,30 @@ class TirsoDriveApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
       valueListenable: drive.themeTick,
-      builder: (context, tick, _) => MaterialApp(
-        key: ValueKey(tick), // rebuild every screen with the new colors
+      builder: (context, tick, _) {
+        // Rebuild every screen with the new colors WITHOUT recreating the app, so you stay where you were.
+        WidgetsBinding.instance.addPostFrameCallback((_) => _repaintAll());
+        return MaterialApp(
         title: 'TirsoDrive',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
-        home: _LockGate(
+        home: drive.desktop == null
+            ? _home()
+            : ValueListenableBuilder<bool>(
+                valueListenable: drive.desktop!.card,
+                // the full app stays alive (hidden) behind the card, so you return to the same screen
+                builder: (context, card, _) => Stack(children: [
+                  Positioned.fill(child: Offstage(offstage: card, child: TickerMode(enabled: !card, child: _home()))),
+                  if (card) Positioned.fill(child: TrayCard(drive: drive)),
+                ]),
+              ),
+      );
+      },
+    );
+  }
+
+  Widget _home() {
+    return _LockGate(
           drive: drive,
           child: ListenableBuilder(
             listenable: drive,
@@ -53,10 +77,16 @@ class TirsoDriveApp extends StatelessWidget {
               }
             },
           ),
-        ),
-      ),
-    );
+        );
   }
+}
+
+void _repaintAll() {
+  void visit(Element e) {
+    e.markNeedsBuild();
+    e.visitChildren(visit);
+  }
+  WidgetsBinding.instance.rootElement?.visitChildren(visit);
 }
 
 class MainShell extends StatefulWidget {

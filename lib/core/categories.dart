@@ -22,6 +22,8 @@ const List<Category> libraryCategories = [
   Category('videos', 'TD - Videos', 'Videos', 'Videos', 'VID', Color(0xFFE86F6F)),
   Category('photos', 'TD - Photos', 'Photos', 'Fotos', 'IMG', Color(0xFF6FD39A)),
   Category('games', 'TD - Games', 'Games (APKs)', 'Juegos (APKs)', 'APK', Color(0xFFF5A524)),
+  Category('audio', 'TD - Audio', 'Audio', 'Audio', 'AUD', Color(0xFF4FD1D9)),
+  Category('docs', 'TD - Documents', 'Documents', 'Documentos', 'DOC', Color(0xFF7C9CF5)),
   Category('compressed', 'TD - Compressed', 'Compressed', 'Comprimidos', 'ZIP', Color(0xFFB58CF2)),
   Category('other', 'TD - Other', 'Other', 'Otros', '···', Color(0xFF8C97AD)),
 ];
@@ -65,6 +67,13 @@ const Map<String, String> _extToKey = {
   // photos
   'jpg': 'photos', 'jpeg': 'photos', 'png': 'photos', 'gif': 'photos', 'webp': 'photos', 'heic': 'photos',
   'heif': 'photos', 'bmp': 'photos', 'tif': 'photos', 'tiff': 'photos', 'dng': 'photos', 'raw': 'photos',
+  // audio
+  'mp3': 'audio', 'm4a': 'audio', 'flac': 'audio', 'wav': 'audio', 'ogg': 'audio', 'oga': 'audio', 'opus': 'audio',
+  'aac': 'audio', 'wma': 'audio', 'aiff': 'audio', 'aif': 'audio', 'amr': 'audio', 'mid': 'audio', 'midi': 'audio',
+  // documents
+  'pdf': 'docs', 'doc': 'docs', 'docx': 'docs', 'xls': 'docs', 'xlsx': 'docs', 'xlsm': 'docs', 'ppt': 'docs',
+  'pptx': 'docs', 'odt': 'docs', 'ods': 'docs', 'odp': 'docs', 'txt': 'docs', 'rtf': 'docs', 'csv': 'docs',
+  'epub': 'docs', 'mobi': 'docs', 'json': 'docs', 'xml': 'docs', 'html': 'docs', 'htm': 'docs',
   // games
   'apk': 'games', 'xapk': 'games', 'apks': 'games', 'apkm': 'games',
   // compressed
@@ -143,7 +152,8 @@ String mimeFor(String name) {
     'm4v': 'video/mp4', '3gp': 'video/3gpp', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
     'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic', 'bmp': 'image/bmp', 'pdf': 'application/pdf',
     'apk': 'application/vnd.android.package-archive', 'zip': 'application/zip', 'rar': 'application/vnd.rar',
-    '7z': 'application/x-7z-compressed', 'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'txt': 'text/plain',
+    '7z': 'application/x-7z-compressed', 'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'txt': 'text/plain', 'flac': 'audio/flac', 'wav': 'audio/wav', 'ogg': 'audio/ogg',
+    'opus': 'audio/ogg', 'aac': 'audio/aac', 'epub': 'application/epub+zip',
   };
   return m[extensionOf(name)] ?? 'application/octet-stream';
 }

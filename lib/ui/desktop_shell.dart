@@ -139,7 +139,6 @@ class _DesktopShellState extends State<DesktopShell> {
   }
 
   Widget _header() {
-    final online = d.connection == 'connectionStateReady';
     return Container(
       height: 60,
       padding: EdgeInsets.symmetric(horizontal: 20),
@@ -148,10 +147,8 @@ class _DesktopShellState extends State<DesktopShell> {
         TdLogo(size: 32),
         SizedBox(width: 10),
         Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 19)),
-        SizedBox(width: 24),
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: online ? C.green : C.amber, shape: BoxShape.circle)),
-        SizedBox(width: 8),
-        Text(online ? t('status_online') : t('status_connecting'), style: TextStyle(fontSize: 13, color: C.muted)),
+        SizedBox(width: 10),
+        ConnectionDot(state: d.connection),
         SizedBox(width: 24),
         Expanded(
           child: Align(

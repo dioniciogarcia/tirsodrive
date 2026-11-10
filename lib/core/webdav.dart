@@ -52,22 +52,60 @@ class WebDavDrive {
     d.notifyListeners();
   }
 
+  /// 'running', 'stopped' or 'missing' (asks Windows itself; the old message guessed).
+  Future<String> _webClientState() async {
+    try {
+      final o = '${(await Process.run('sc', ['query', 'WebClient'])).stdout}';
+      if (o.contains('RUNNING')) return 'running';
+      if (o.contains('STOPPED') || o.contains('START_PENDING')) return 'stopped';
+    } catch (_) {}
+    return 'missing';
+  }
+
+  /// Removes T: style mappings left over from a previous run that didn't close cleanly.
+  Future<void> _dropStale() async {
+    try {
+      final o = '${(await Process.run('net', ['use'])).stdout}';
+      for (final m in RegExp(r'([A-Z]):\s+\\\\127\.0\.0\.1@\d+|([A-Z]):\s+http://127\.0\.0\.1', caseSensitive: false).allMatches(o)) {
+        final l = (m.group(1) ?? m.group(2))!.toUpperCase();
+        await Process.run('net', ['use', '$l:', '/delete', '/y']);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _map() async {
-    // The Windows WebDAV service starts on demand; the first try can fail while it starts.
-    for (final l in ['T:', 'U:', 'V:', 'W:', 'X:', 'Y:']) {
-      if (Directory('$l\\').existsSync()) continue; // letter already used
-      for (var attempt = 0; attempt < 2; attempt++) {
-        final r = await Process.run('net', ['use', l, 'http://127.0.0.1:$port/', '/persistent:no']);
-        if (r.exitCode == 0) {
-          letter = l;
-          status = t('drive_on', {'l': l});
-          d.notifyListeners();
-          return;
+    await _dropStale();
+    var detail = '';
+    var tries = 0;
+    while (tries < 2) {
+      tries++;
+      for (final l in ['T:', 'U:', 'V:', 'W:', 'X:', 'Y:']) {
+        if (Directory('$l\\').existsSync()) continue; // letter already used
+        // two address forms: Windows accepts one or the other depending on its WebClient version
+        for (final target in ['http://127.0.0.1:$port/', '\\\\127.0.0.1@$port\\DavWWWRoot']) {
+          final r = await Process.run('net', ['use', l, target, '/persistent:no']);
+          if (r.exitCode == 0) {
+            letter = l;
+            status = t('drive_on', {'l': l});
+            d.notifyListeners();
+            return;
+          }
+          detail = '${r.stderr}${r.stdout}'.replaceAll(RegExp(r'\s+'), ' ').trim();
         }
-        await Future.delayed(const Duration(seconds: 2));
+        break; // the first free letter is the one we want; its failure isn't about the letter
+      }
+      if (tries == 1) {
+        // The service starts on demand and may need a moment; if it is truly stopped, try starting it.
+        if (await _webClientState() != 'running') {
+          await Process.run('sc', ['start', 'WebClient']);
+        }
+        await Future.delayed(const Duration(seconds: 3));
       }
     }
-    status = t('drive_err_map');
+    final state = await _webClientState();
+    status = state == 'running'
+        ? t('drive_err_map', {'e': detail.length > 160 ? detail.substring(0, 160) : detail})
+        : t('drive_err_service');
     d.notifyListeners();
   }
 

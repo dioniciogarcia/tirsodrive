@@ -58,8 +58,6 @@ class LibraryScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: drive,
       builder: (context, _) {
-        final online = drive.connection == 'connectionStateReady';
-        final waiting = drive.connection == 'connectionStateWaitingForNetwork';
         final mine = drive.customChannels;
         final romCount = romCategories.where((c) => drive.channelForKey(c.key) != null).length;
         return Scaffold(
@@ -79,6 +77,8 @@ class LibraryScreen extends StatelessWidget {
                 children: [
                   Row(children: [
                     Text('TirsoDrive', style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 24)),
+                    SizedBox(width: 10),
+                    ConnectionDot(state: drive.connection),
                     Spacer(),
                     IconButton.outlined(
                       tooltip: t('search_title'),
@@ -94,26 +94,6 @@ class LibraryScreen extends StatelessWidget {
                           style: TextStyle(color: C.text, fontWeight: FontWeight.w600)),
                     ),
                   ]),
-                  SizedBox(height: 18),
-                  Panel(
-                    color: online ? C.greenBg : C.surface,
-                    borderColor: online ? C.greenBorder : C.border,
-                    child: Row(children: [
-                      online
-                          ? Icon(Icons.cloud_done_outlined, color: C.green)
-                          : SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(online ? t('status_online') : (waiting ? t('status_waiting') : t('status_connecting')),
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                          SizedBox(height: 3),
-                          Text(t('status_channels', {'n': drive.channels.length}),
-                              style: TextStyle(fontSize: 12, color: online ? C.greenSub : C.muted)),
-                        ]),
-                      ),
-                    ]),
-                  ),
                   SizedBox(height: 22),
                   SectionLabel(t('section_library')),
                   SizedBox(height: 10),

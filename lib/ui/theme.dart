@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/strings.dart';
 
 class C {
   /// true = dark colors. Set from Settings (Light / Dark / Automatic).
@@ -203,4 +204,31 @@ void snack(BuildContext context, String msg) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(msg)));
+}
+
+
+/// Small connection indicator: green dot = connected, amber = waiting for network,
+/// spinner ONLY while really connecting. TDLib's "updating" (catching up on messages) counts as connected.
+class ConnectionDot extends StatelessWidget {
+  final String state;
+  const ConnectionDot({super.key, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final connecting = state == 'connectionStateConnecting' || state == 'connectionStateConnectingToProxy';
+    final waiting = state == 'connectionStateWaitingForNetwork';
+    final label = connecting ? t('status_connecting') : (waiting ? t('status_waiting') : t('status_online'));
+    return Tooltip(
+      message: label,
+      child: SizedBox(
+        width: 16,
+        height: 16,
+        child: Center(
+          child: connecting
+              ? SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+              : Container(width: 10, height: 10, decoration: BoxDecoration(color: waiting ? C.amber : C.green, shape: BoxShape.circle)),
+        ),
+      ),
+    );
+  }
 }

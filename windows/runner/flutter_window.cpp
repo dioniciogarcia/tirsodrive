@@ -28,7 +28,10 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    // started by "Start with Windows": stay hidden in the tray
+    if (wcsstr(GetCommandLineW(), L"--minimized") == nullptr) {
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is

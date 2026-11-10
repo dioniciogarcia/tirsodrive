@@ -1,4 +1,5 @@
 // The heart of TirsoDrive: sign-in, channels, files and the transfer queue.
+import 'desktop.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -22,7 +23,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.8.0';
+const String appVersion = '0.9.0';
 
 class DriveChannel {
   final int chatId;
@@ -185,6 +186,8 @@ class Drive extends ChangeNotifier {
   String themeMode = 'dark'; // dark | light | system
   // upload rules
   bool ruleWifi = false;
+  bool keepInTray = true; // Windows: closing the window keeps TirsoDrive running in the tray
+  DesktopHost? desktop;
   bool ruleCharging = false;
   int quietFrom = -1; // hour 0-23, -1 = off
   int quietTo = -1;
@@ -239,6 +242,7 @@ class Drive extends ChangeNotifier {
     maxBytes = _prefs.getInt('maxBytes') ?? maxBytes;
     sortMode = _prefs.getString('sortMode') ?? sortMode;
     ruleWifi = _prefs.getBool('ruleWifi') ?? false;
+    keepInTray = _prefs.getBool('keepInTray') ?? true;
     ruleCharging = _prefs.getBool('ruleCharging') ?? false;
     quietFrom = _prefs.getInt('quietFrom') ?? -1;
     quietTo = _prefs.getInt('quietTo') ?? -1;
@@ -308,11 +312,17 @@ class Drive extends ChangeNotifier {
     themeTick.value++;
   }
 
+  void setKeepInTray(bool v) {
+    _prefs.setBool('keepInTray', keepInTray = v);
+    notifyListeners();
+  }
+
   void setRules({bool? wifi, bool? charging, int? from, int? to}) {
     if (wifi != null) _prefs.setBool('ruleWifi', ruleWifi = wifi);
     if (charging != null) _prefs.setBool('ruleCharging', ruleCharging = charging);
     if (from != null) _prefs.setInt('quietFrom', quietFrom = from);
     if (to != null) _prefs.setInt('quietTo', quietTo = to);
+    notifyListeners(); // the switches only move when the screen is told (this was the "toggle doesn't work" bug)
     _checkRules();
   }
 
