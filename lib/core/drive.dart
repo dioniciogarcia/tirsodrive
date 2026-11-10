@@ -19,13 +19,12 @@ import 'programs.dart';
 import 'stream_server.dart';
 import 'sync.dart';
 import 'vault.dart';
-import 'webdav.dart';
 import 'strings.dart';
 
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.11.3';
+const String appVersion = '0.12.0';
 
 class DriveChannel {
   final int chatId;
@@ -179,12 +178,10 @@ class Drive extends ChangeNotifier {
   final TdClient td = TdClient();
   late final SyncManager sync = SyncManager(this);
   late final StreamServer streamer = StreamServer(this);
-  late final WebDavDrive webdav = WebDavDrive(this);
   Drive() {
     current = this;
   }
   late final Programs programs = Programs(this);
-  bool driveLetter = false; // Windows: show TirsoDrive as a drive letter
   late SharedPreferences _prefs;
 
   // settings
@@ -406,17 +403,6 @@ class Drive extends ChangeNotifier {
   }
 
   void savePrograms() => _prefs.setString('programs', programs.json);
-
-  Future<void> setDriveLetter(bool on) async {
-    driveLetter = on;
-    await _prefs.setBool('driveLetter', on);
-    if (on) {
-      await webdav.start();
-    } else {
-      await webdav.stop();
-    }
-    notifyListeners();
-  }
 
   void setSort(String m) {
     sortMode = m;
@@ -693,9 +679,7 @@ class Drive extends ChangeNotifier {
     await sync.load();
     sync.start();
     unawaited(purgeTrash());
-    driveLetter = _prefs.getBool('driveLetter') ?? false;
     programs.load(_prefs.getString('programs'));
-    if (driveLetter) unawaited(webdav.start());
     if (Platform.isAndroid && !isTv) {
       phone ??= PhoneBridge(this);
       phone!.start();

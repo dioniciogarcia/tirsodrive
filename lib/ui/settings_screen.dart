@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 import '../core/desktop.dart';
 import '../core/drive.dart';
 import '../core/strings.dart';
-import '../core/webdav.dart';
 import 'lock_screen.dart';
 import 'programs_screen.dart';
 import 'sync_screen.dart';
@@ -221,28 +220,6 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: Text(drive.vaultKey != null ? t('enc_on') : t('enc_off'), style: TextStyle(color: C.muted, fontSize: 12)),
                 ),
                 SizedBox(height: 24),
-                if (Platform.isWindows) ...[
-                  SectionLabel(t('drive_title')),
-                  SizedBox(height: 6),
-                  Text(t('drive_intro'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: drive.driveLetter,
-                    onChanged: drive.setDriveLetter,
-                    title: Text(t('drive_switch'), style: TextStyle(fontSize: 14)),
-                    subtitle: Text(drive.webdav.status.isEmpty ? t('drive_off') : drive.webdav.status, style: TextStyle(color: C.muted, fontSize: 12)),
-                  ),
-                  if (drive.driveLetter)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: WebDavDrive.allowBigFiles,
-                        icon: Icon(Icons.admin_panel_settings_outlined, size: 18),
-                        label: Text(t('drive_bigfiles')),
-                      ),
-                    ),
-                  SizedBox(height: 24),
-                ],
                 if (Platform.isAndroid && !drive.isTv) ...[
                   SectionLabel(t('watch_title')),
                   SizedBox(height: 6),

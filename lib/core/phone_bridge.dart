@@ -39,6 +39,9 @@ class PhoneBridge {
 
   // ---------------------------------------------------------------- index
 
+  DateTime? _contactsAt;
+  List<ShareTarget> _contacts = [];
+
   Future<void> writeIndex() async {
     if (d.step != AuthStep.ready) return;
     final hidden = d.isolatedChats;
@@ -83,8 +86,17 @@ class PhoneBridge {
       if (files.length >= 6000) break;
       files.add({'i': f.messageId, 'c': f.chatId, 'n': f.name, 's': f.size, 'd': f.date, 'm': f.mime});
     }
-    final favs = d.watchFavorites.map((e) => {'id': e.$1, 'name': e.$2}).toList();
-    final body = jsonEncode({'v': 1, 'lang': appLang, 'groups': groups, 'files': files, 'favorites': favs});
+    // contacts for the watch: recent chats (same list as the phone's share picker) + everyone, for searching
+    final chats = d.shareChats();
+    final recent = chats.take(25).map((e) => {'id': e.chatId, 'name': e.title}).toList();
+    if (_contactsAt == null || DateTime.now().difference(_contactsAt!).inMinutes > 60) {
+      _contactsAt = DateTime.now();
+      _contacts = await d.shareContacts(chats.map((e) => e.chatId).toSet());
+    }
+    final all = <Map<String, dynamic>>[
+      for (final c in [...chats, ..._contacts].take(1500)) {'id': c.chatId, 'name': c.title}
+    ];
+    final body = jsonEncode({'v': 1, 'lang': appLang, 'groups': groups, 'files': files, 'recent': recent, 'all': all});
     if (body == _lastIndex) return;
     _lastIndex = body;
     final out = File('${(await _dir).path}${Platform.pathSeparator}td_index.json');
@@ -128,15 +140,14 @@ class PhoneBridge {
       if (!f.existsSync()) return;
       final list = jsonDecode(await f.readAsString()) as List;
       await f.delete();
-      final favs = d.watchFavorites.map((e) => e.$1).toSet();
       for (final r in list) {
         final m = r as Map<String, dynamic>;
         final to = (m['to'] as num).toInt();
-        if (!favs.contains(to)) continue; // the watch may only send to the favorites chosen on the phone
         final file = d.allFiles.where((x) => x.chatId == (m['c'] as num).toInt() && x.messageId == (m['i'] as num).toInt()).firstOrNull;
         if (file == null) continue;
-        final title = d.watchFavorites.firstWhere((e) => e.$1 == to).$2;
-        await d.sendToChat(ShareTarget(chatId: to, title: title), [file]);
+        final known = d.shareChats().where((e) => e.chatId == to).firstOrNull ?? _contacts.where((e) => e.chatId == to).firstOrNull;
+        if (known == null) continue; // only people/chats from the phone's own lists
+        await d.sendToChat(known, [file]);
       }
     } catch (_) {}
   }

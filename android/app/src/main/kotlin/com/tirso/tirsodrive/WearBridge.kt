@@ -27,7 +27,7 @@ class WearBridge : WearableListenerService() {
     private fun handle(req: JSONObject): JSONObject {
         val idx = TirsoDocs.readIndex(this) ?: return JSONObject().put("empty", true)
         return when (req.optString("op")) {
-            "menu" -> JSONObject().put("groups", idx.optJSONArray("groups")).put("favorites", idx.optJSONArray("favorites"))
+            "menu" -> JSONObject().put("groups", idx.optJSONArray("groups")).put("recent", idx.optJSONArray("recent"))
                 .put("lang", idx.optString("lang", "en")).put("updated", idx.optLong("updated"))
             "files" -> {
                 val chat = req.optLong("c")
@@ -54,6 +54,18 @@ class WearBridge : WearableListenerService() {
                     if (words.isNotEmpty() && words.all { nm.contains(it) }) { out.put(f); if (++n >= 40) break }
                 }
                 JSONObject().put("files", out)
+            }
+            "csearch" -> {
+                val words = req.optString("q").lowercase().trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val all = idx.optJSONArray("all") ?: JSONArray()
+                val out = JSONArray()
+                var n = 0
+                for (i in 0 until all.length()) {
+                    val c = all.getJSONObject(i)
+                    val nm = c.optString("name").lowercase()
+                    if (words.all { nm.contains(it) }) { out.put(c); if (++n >= 40) break }
+                }
+                JSONObject().put("contacts", out)
             }
             "share" -> {
                 val q = File(filesDir, "wear_share.json")

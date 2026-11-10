@@ -38,6 +38,8 @@ class Strings(val es: Boolean) {
     val more get() = if (es) "Más…" else "More…"
     val share get() = if (es) "Enviar a…" else "Send to…"
     val noFavs get() = if (es) "Elige contactos favoritos en el teléfono" else "Choose favorite contacts on the phone"
+    val allContacts get() = if (es) "Todos los contactos" else "All contacts"
+    val searchContacts get() = if (es) "Buscar contacto" else "Search contacts"
     val sent get() = if (es) "Enviado" else "Sent"
     val finishOnPhone get() = if (es) "Abre TirsoDrive en el teléfono para terminar el envío" else "Open TirsoDrive on the phone to finish sending"
     val results get() = if (es) "Resultados" else "Results"

@@ -115,7 +115,7 @@ fun WatchApp() {
                     if (r.optBoolean("empty") || r.has("error")) failed = true
                     else {
                         groups = r.optJSONArray("groups").groups()
-                        favs = r.optJSONArray("favorites").contacts()
+                        favs = r.optJSONArray("recent").contacts()
                         es = r.optString("lang") == "es"
                     }
                 } catch (_: Exception) { failed = true }
@@ -165,7 +165,7 @@ fun WatchApp() {
                                 })
                             is Screen.Kids -> KidsList(screen, groups.filter { it.parent == screen.parent }) { g -> push(Screen.Files(g.title, g.chatId)) }
                             is Screen.Files -> FileList(screen, s) { push(Screen.Detail(it)) }
-                            is Screen.Detail -> Detail(screen.file, s, favs.isNotEmpty()) { push(Screen.Share(screen.file)) }
+                            is Screen.Detail -> Detail(screen.file, s, true) { push(Screen.Share(screen.file)) }
                             is Screen.Share -> ShareList(screen.file, favs, s, onDone = { pop() })
                         }
                     }
@@ -295,27 +295,59 @@ fun Detail(f: WFile, s: Strings, canShare: Boolean, onShare: () -> Unit) {
 }
 
 @Composable
-fun ShareList(f: WFile, favs: List<Contact>, s: Strings, onDone: () -> Unit) {
+fun ShareList(f: WFile, recent: List<Contact>, s: Strings, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    var found by remember { mutableStateOf<List<Contact>>(emptyList()) }
+    var query by remember { mutableStateOf("") }
+
+    fun lookup(q: String) {
+        query = q
+        scope.launch {
+            found = try { PhoneLink.request(ctx, "csearch") { put("q", q) }.optJSONArray("contacts").contacts() } catch (_: Exception) { emptyList() }
+        }
+    }
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == Activity.RESULT_OK) {
+            val q = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!q.isNullOrBlank()) lookup(q)
+        }
+    }
+    fun send(c: Contact) {
+        scope.launch {
+            status = try {
+                val r = PhoneLink.request(ctx, "share") { put("c", f.chat); put("i", f.id); put("to", c.id) }
+                if (r.optBoolean("live")) "${s.sent} ✓" else s.finishOnPhone
+            } catch (_: Exception) { s.noPhone }
+        }
+    }
+    @Composable
+    fun row(c: Contact) = Chip(
+        onClick = { send(c) },
+        label = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        colors = ChipDefaults.chipColors(backgroundColor = Card),
+        modifier = Modifier.fillMaxSize(),
+    )
     ScalingLazyColumn(Modifier.fillMaxSize()) {
-        item { Text(s.share, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
+        item { Text(if (searching) s.allContacts else s.share, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) }
         if (status != null) item { Text(status!!, color = Accent, textAlign = TextAlign.Center, fontSize = 13.sp, modifier = Modifier.padding(8.dp)) }
-        items(favs) { c ->
-            Chip(
-                onClick = {
-                    scope.launch {
-                        status = try {
-                            val r = PhoneLink.request(ctx, "share") { put("c", f.chat); put("i", f.id); put("to", c.id) }
-                            if (r.optBoolean("live")) "${s.sent} ✓" else s.finishOnPhone
-                        } catch (_: Exception) { s.noPhone }
-                    }
-                },
-                label = { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                colors = ChipDefaults.chipColors(backgroundColor = Card),
-                modifier = Modifier.fillMaxSize(),
-            )
+        if (!searching) {
+            items(recent) { c -> row(c) }
+            item {
+                Chip(onClick = { searching = true; lookup("") }, label = { Text(s.allContacts) },
+                    colors = ChipDefaults.primaryChipColors(backgroundColor = Accent), modifier = Modifier.fillMaxSize())
+            }
+        } else {
+            item {
+                Chip(
+                    onClick = { speech.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)) },
+                    label = { Text(s.searchContacts) },
+                    secondaryLabel = { Text(if (query.isEmpty()) s.searchHint else "\"$query\"", fontSize = 11.sp) },
+                    colors = ChipDefaults.primaryChipColors(backgroundColor = Accent), modifier = Modifier.fillMaxSize())
+            }
+            items(found) { c -> row(c) }
         }
     }
 }
