@@ -196,6 +196,7 @@ class WebDavDrive {
   Future<void> _handle(HttpRequest req) async {
     final res = req.response;
     res.headers.set('MS-Author-Via', 'DAV');
+    res.headers.set('Server', 'Microsoft-IIS/10.0');
     final seg = _segments(req.uri);
     switch (req.method) {
       case 'OPTIONS':
@@ -286,9 +287,10 @@ class WebDavDrive {
     return '<D:response><D:href>${_esc(_href(seg, folder))}</D:href><D:propstat><D:prop>'
         '<D:displayname>${_esc(name)}</D:displayname>'
         '<D:resourcetype>${folder ? '<D:collection/>' : ''}</D:resourcetype>'
-        '${folder ? '' : '<D:getcontentlength>$size</D:getcontentlength><D:getcontenttype>${_esc(mime ?? 'application/octet-stream')}</D:getcontenttype>'}'
+        '<D:getetag>"${(time ?? DateTime.fromMillisecondsSinceEpoch(0)).millisecondsSinceEpoch.toRadixString(16)}-${size.toRadixString(16)}"</D:getetag>'
+        '${folder ? '<D:getcontentlength>0</D:getcontentlength><D:getcontenttype>httpd/unix-directory</D:getcontenttype>' : '<D:getcontentlength>$size</D:getcontentlength><D:getcontenttype>${_esc(mime ?? 'application/octet-stream')}</D:getcontenttype>'}'
         '<D:getlastmodified>$when</D:getlastmodified><D:creationdate>${(time ?? DateTime.now()).toUtc().toIso8601String()}</D:creationdate>'
-        '<D:supportedlock><D:lockentry><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock>'
+        '<D:lockdiscovery/><D:supportedlock><D:lockentry><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock>'
         '</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>';
   }
 
