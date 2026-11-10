@@ -20,6 +20,8 @@ import 'theme.dart';
 import 'transfers_screen.dart';
 import 'upload_review.dart';
 
+const _apkDot = Color(0xFFF5A524);
+
 class DesktopShell extends StatefulWidget {
   final Drive drive;
   const DesktopShell({super.key, required this.drive});
@@ -61,7 +63,7 @@ class _DesktopShellState extends State<DesktopShell> {
     await uploadFiles(context, d, files, fixedKey: _selKey, fixedChatId: _selChat);
   }
 
-  Widget _navItem(String id, String label, Color dot, {String? trailing}) {
+  Widget _navItem(String id, String label, Color dot, {String? trailing, String? logo}) {
     final on = _sel == id;
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 1),
@@ -74,8 +76,11 @@ class _DesktopShellState extends State<DesktopShell> {
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             child: Row(children: [
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, borderRadius: BorderRadius.circular(3))),
-              SizedBox(width: 12),
+              if (logo != null)
+                ConsoleLogo(logo, size: 22)
+              else
+                Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, borderRadius: BorderRadius.circular(3))),
+              SizedBox(width: logo != null ? 10 : 12),
               Expanded(
                 child: Text(label,
                     maxLines: 1,
@@ -93,6 +98,7 @@ class _DesktopShellState extends State<DesktopShell> {
   Widget _label(String s) => Padding(padding: EdgeInsets.fromLTRB(12, 16, 12, 6), child: SectionLabel(s));
 
   Widget _sidebar() {
+    final apks = apkCategories.where((c) => _showAllRoms || d.channelForKey(c.key) != null).toList();
     final roms = romCategories.where((c) => _showAllRoms || d.channelForKey(c.key) != null).toList();
     final active = d.transfers.where((x) => !x.finished).length;
     return Container(
@@ -104,6 +110,13 @@ class _DesktopShellState extends State<DesktopShell> {
           _navItem('search', t('search_title'), C.accentSoft),
           _label(t('section_library')),
           for (final c in libraryCategories) _navItem('cat:${c.key}', c.label(appLang), c.color),
+          _label(t('section_apks')),
+          if (apks.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(t('apks_sub'), style: TextStyle(fontSize: 12, color: C.label)),
+            ),
+          for (final c in apks) _navItem('cat:${c.key}', c.label(appLang), _apkDot, logo: c.logoAsset),
           Row(children: [
             Expanded(child: _label(t('section_roms'))),
             TextButton(
@@ -116,7 +129,7 @@ class _DesktopShellState extends State<DesktopShell> {
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text(t('roms_sub'), style: TextStyle(fontSize: 12, color: C.label)),
             ),
-          for (final c in roms) _navItem('cat:${c.key}', c.label(appLang), C.accent),
+          for (final c in roms) _navItem('cat:${c.key}', c.label(appLang), C.accent, logo: c.logoAsset),
           Row(children: [
             Expanded(child: _label(t('section_mine'))),
             IconButton(tooltip: t('new_channel'), onPressed: () => showNewChannelDialog(context, d), icon: Icon(Icons.add, size: 18, color: C.accentSoft)),

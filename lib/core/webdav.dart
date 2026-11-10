@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'desktop.dart';
 import 'drive.dart';
 import 'strings.dart';
 
@@ -15,6 +16,7 @@ class WebDavDrive {
   HttpServer? _server;
   String? letter; // mapped drive letter, e.g. "T:"
   String status = '';
+  int hits = 0; // requests Windows has sent us (0 after a failed mapping = Windows never reached the server)
   final Map<String, (int, DateTime)> _pending = {}; // "/Channel/name" → being uploaded (size, time)
 
   WebDavDrive(this.d);
@@ -37,7 +39,15 @@ class WebDavDrive {
       d.notifyListeners();
       return;
     }
-    _server!.listen((r) => _handle(r).catchError((_) {}));
+    _server!.listen((r) {
+      hits++;
+      DesktopHost.log('webdav ${r.method} ${r.uri} [${r.headers.value('user-agent') ?? ''}]');
+      _handle(r).catchError((e) {
+        DesktopHost.log('webdav handler error: $e');
+      });
+    });
+    await DesktopHost.log('webdav server on 127.0.0.1:$port');
+    await _selfTest();
     await _map();
   }
 
@@ -50,6 +60,28 @@ class WebDavDrive {
     _server = null;
     status = '';
     d.notifyListeners();
+  }
+
+  /// Asks our own server the way Windows will, to prove it answers (and to write the answer to the log).
+  Future<void> _selfTest() async {
+    try {
+      final c = HttpClient()..findProxy = (_) => 'DIRECT';
+      final rq = await c.openUrl('PROPFIND', Uri.parse('http://127.0.0.1:$port/'));
+      rq.headers.set('Depth', '0');
+      final rs = await rq.close();
+      final body = await utf8.decodeStream(rs);
+      await DesktopHost.log('webdav self-test PROPFIND / -> ${rs.statusCode}, ${body.length} bytes');
+      c.close(force: true);
+      hits = 0;
+    } catch (e) {
+      await DesktopHost.log('webdav self-test failed: $e');
+    }
+    try {
+      final r = await Process.run('netsh', ['winhttp', 'show', 'proxy']);
+      await DesktopHost.log('winhttp proxy: ${'${r.stdout}'.replaceAll(RegExp(r'\s+'), ' ').trim()}');
+      final w = await Process.run('sc', ['qc', 'WebClient']);
+      await DesktopHost.log('WebClient config: ${'${w.stdout}'.replaceAll(RegExp(r'\s+'), ' ').trim()}');
+    } catch (_) {}
   }
 
   /// 'running', 'stopped' or 'missing' (asks Windows itself; the old message guessed).
@@ -82,7 +114,7 @@ class WebDavDrive {
       for (final l in ['T:', 'U:', 'V:', 'W:', 'X:', 'Y:']) {
         if (Directory('$l\\').existsSync()) continue; // letter already used
         // two address forms: Windows accepts one or the other depending on its WebClient version
-        for (final target in ['http://127.0.0.1:$port/', '\\\\127.0.0.1@$port\\DavWWWRoot']) {
+        for (final target in ['http://127.0.0.1:$port/', '\\\\127.0.0.1@$port\\DavWWWRoot', 'http://localhost:$port/', '\\\\localhost@$port\\DavWWWRoot']) {
           final r = await Process.run('net', ['use', l, target, '/persistent:no']);
           if (r.exitCode == 0) {
             letter = l;
@@ -91,6 +123,7 @@ class WebDavDrive {
             return;
           }
           detail = '${r.stderr}${r.stdout}'.replaceAll(RegExp(r'\s+'), ' ').trim();
+          await DesktopHost.log('net use $l $target -> ${r.exitCode} $detail (server saw $hits requests)');
         }
         break; // the first free letter is the one we want; its failure isn't about the letter
       }
@@ -104,7 +137,7 @@ class WebDavDrive {
     }
     final state = await _webClientState();
     status = state == 'running'
-        ? t('drive_err_map', {'e': detail.length > 160 ? detail.substring(0, 160) : detail})
+        ? t('drive_err_map', {'e': '${detail.length > 140 ? detail.substring(0, 140) : detail} [requests: $hits]'})
         : t('drive_err_service');
     d.notifyListeners();
   }

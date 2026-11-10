@@ -10,7 +10,7 @@ import 'native.dart';
 import 'strings.dart';
 import '../td/td_client.dart';
 
-const tirsoConsoles = ['N64', 'DS', 'PSP', 'PS2', 'GameCube', 'Wii'];
+const tirsoConsoles = ['N64', 'GBA', 'DS', 'GameCube', 'Wii', 'PS1', 'PS2', 'PSP'];
 
 class ConnectedProgram {
   final String name;

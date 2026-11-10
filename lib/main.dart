@@ -20,9 +20,12 @@ Future<void> main(List<String> args) async {
   await drive.loadTheme(); // before the first frame, so there is no flash of the wrong theme
   if (DesktopHost.supported) {
     drive.desktop = DesktopHost(drive);
-    await drive.desktop!.init(startHidden: args.contains('--minimized'));
   }
   runApp(TirsoDriveApp(drive: drive));
+  if (drive.desktop != null) {
+    // the tray and window plugins need the native window to be fully up
+    Future.delayed(const Duration(milliseconds: 800), () => drive.desktop!.init(startHidden: args.contains('--minimized')));
+  }
   await drive.init();
 }
 

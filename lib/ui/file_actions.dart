@@ -167,7 +167,7 @@ Future<void> copyOrMove(BuildContext context, Drive d, List<DriveFile> files, {r
       for (final c in allCategories) {
         final ch = d.channelForKey(c.key);
         if (ch != null && here.length == 1 && here.contains(ch.chatId)) continue;
-        tiles.add(tile('key:${c.key}', c.isRom ? 'ROMs · ${c.label(appLang)}' : c.label(appLang), ch != null ? c.channelTitle : t('not_created'),
+        tiles.add(tile('key:${c.key}', c.full(appLang), ch != null ? c.channelTitle : t('not_created'),
             c.color, c.tag));
       }
       for (final ch in d.customChannels) {

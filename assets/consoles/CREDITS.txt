@@ -1,0 +1,3 @@
+Console images: RetroArch "retroarch-assets" (xmb systematic / flatui / daite sets), licensed CC-BY 4.0.
+https://github.com/libretro/retroarch-assets
+Console names and designs belong to their respective owners (Nintendo, Sony, Sega); shown only to label the user's own files.

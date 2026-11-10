@@ -67,7 +67,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     final ordered = <String>[...suggested, ...allCategories.map((c) => c.key).where((k) => !suggested.contains(k))];
     final items = ordered.map((k) {
       final c = categoryByKey(k)!;
-      return DropdownMenuItem(value: k, child: Text(c.isRom ? 'ROMs · ${c.label(appLang)}' : c.label(appLang), overflow: TextOverflow.ellipsis));
+      return DropdownMenuItem(value: k, child: Text(c.full(appLang), overflow: TextOverflow.ellipsis));
     }).toList();
     for (final ch in widget.drive.customChannels) {
       items.add(DropdownMenuItem(value: 'chat:${ch.chatId}', child: Text(ch.display, overflow: TextOverflow.ellipsis)));

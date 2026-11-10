@@ -4,6 +4,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -29,36 +31,70 @@ class DesktopHost with TrayListener, WindowListener {
   static Future<bool> autostartEnabled() async {
     if (!Platform.isWindows) return false;
     final r = await Process.run('reg', ['query', _runKey, '/v', _runName]);
-    return r.exitCode == 0;
+    return r.exitCode == 0 && '${r.stdout}'.contains('--minimized');
   }
 
-  static Future<void> setAutostart(bool on) async {
-    if (!Platform.isWindows) return;
-    if (on) {
-      await Process.run('reg', ['add', _runKey, '/v', _runName, '/t', 'REG_SZ', '/d', '"${Platform.resolvedExecutable}" --minimized', '/f']);
-    } else {
-      await Process.run('reg', ['delete', _runKey, '/v', _runName, '/f']);
-    }
+  /// Returns null when it worked, otherwise Windows' error text.
+  static Future<String?> setAutostart(bool on) async {
+    if (!Platform.isWindows) return null;
+    final exe = Platform.resolvedExecutable.replaceAll("'", "''");
+    final ps = on
+        ? "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '$_runName' -Value '\"$exe\" --minimized'"
+        : "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name '$_runName' -ErrorAction SilentlyContinue";
+    final r = await Process.run('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps]);
+    final ok = (await autostartEnabled()) == on;
+    await log('autostart ${on ? 'on' : 'off'}: exit ${r.exitCode} ${r.stderr} -> ${ok ? 'ok' : 'FAILED'}');
+    return ok ? null : '${r.stderr}'.trim();
   }
+
+  // ---------------- log (so a failure can be diagnosed from a file instead of guessing)
+
+  static Future<void> log(String line) async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      await File(p.join(dir.path, 'desktop.log')).writeAsString('${DateTime.now().toIso8601String()} $line\n', mode: FileMode.append);
+    } catch (_) {}
+  }
+
+  bool trayOk = false;
 
   // ---------------- setup
 
+  /// Called a moment after the first frame, when the native window and its plugins are fully ready.
   Future<void> init({required bool startHidden}) async {
     if (!supported) return;
-    await windowManager.ensureInitialized();
-    await windowManager.setPreventClose(true);
-    windowManager.addListener(this);
-    trayManager.addListener(this);
+    await log('init (hidden start: $startHidden)');
     try {
-      await trayManager.setIcon('assets/tray_icon.ico');
-      await trayManager.setToolTip('TirsoDrive');
-      await _menu();
-    } catch (_) {}
+      await windowManager.ensureInitialized();
+      await windowManager.setPreventClose(true);
+      windowManager.addListener(this);
+    } catch (e) {
+      await log('window manager failed: $e');
+    }
+    trayManager.addListener(this);
+    final icon = p.join(p.dirname(Platform.resolvedExecutable), 'data', 'flutter_assets', 'assets', 'tray_icon.ico');
+    await log('tray icon file exists: ${File(icon).existsSync()} ($icon)');
+    for (var attempt = 1; attempt <= 4 && !trayOk; attempt++) {
+      try {
+        await trayManager.setIcon('assets/tray_icon.ico');
+        await trayManager.setToolTip('TirsoDrive');
+        await _menu();
+        trayOk = true;
+        await log('tray icon created (attempt $attempt)');
+      } catch (e) {
+        await log('tray attempt $attempt failed: $e');
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    }
     d.addListener(_refresh);
     _ready = true;
     if (startHidden) {
-      await windowManager.hide();
-      await windowManager.setSkipTaskbar(true);
+      if (trayOk) {
+        await windowManager.hide();
+        await windowManager.setSkipTaskbar(true);
+      } else {
+        await showMain(); // never leave the app invisible without a tray icon to bring it back
+      }
     }
   }
 
@@ -127,7 +163,7 @@ class DesktopHost with TrayListener, WindowListener {
   @override
   void onWindowClose() async {
     if (_quitting) return;
-    if (d.keepInTray) {
+    if (d.keepInTray && trayOk) {
       await hideAll(); // keep running: uploads and folder sync go on in the background
     } else {
       await quit();

@@ -9,7 +9,10 @@ void main() {
     expect(routeFile('Mario Kart DS.nds'), 'rom_ds');
     expect(routeFile('Holiday.MP4'), 'videos');
     expect(routeFile('IMG_2041.jpg'), 'photos');
-    expect(routeFile('Super Mario 64 TV.apk'), 'games');
+    expect(routeFile('Super Mario 64 N64 TV.apk'), 'apk_n64');
+    expect(routeFile('Kirby.apk'), 'games');
+    expect(routeFile('God of War PS2.apk'), 'apk_ps2');
+    expect(routeFile('Mario Kart DS.apk'), 'apk_ds');
     expect(routeFile('saves.7z'), 'compressed');
     expect(routeFile('notes.txt'), 'docs');
     expect(routeFile('Report.PDF'), 'docs');

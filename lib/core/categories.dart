@@ -11,9 +11,16 @@ class Category {
   final String tag; // short badge text
   final Color color;
   final bool isRom;
-  const Category(this.key, this.channelTitle, this.en, this.es, this.tag, this.color, {this.isRom = false});
+  final bool isApk; // an APK channel for one console (Tirso Compiler's output)
+  final String? logo; // console PNG in assets/consoles/
+  const Category(this.key, this.channelTitle, this.en, this.es, this.tag, this.color, {this.isRom = false, this.isApk = false, this.logo});
 
   String label(String lang) => lang == 'es' ? es : en;
+
+  /// Name with its group, e.g. "ROMs · N64" or "APKs · N64".
+  String full(String lang) => isRom ? 'ROMs · ${label(lang)}' : (isApk ? 'APKs · ${label(lang)}' : label(lang));
+
+  String? get logoAsset => logo == null ? null : 'assets/consoles/$logo.png';
 }
 
 const _romColor = Color(0xFF3BA7F5);
@@ -21,30 +28,45 @@ const _romColor = Color(0xFF3BA7F5);
 const List<Category> libraryCategories = [
   Category('videos', 'TD - Videos', 'Videos', 'Videos', 'VID', Color(0xFFE86F6F)),
   Category('photos', 'TD - Photos', 'Photos', 'Fotos', 'IMG', Color(0xFF6FD39A)),
-  Category('games', 'TD - Games', 'Games (APKs)', 'Juegos (APKs)', 'APK', Color(0xFFF5A524)),
+  Category('games', 'TD - Games', 'Other games (APKs)', 'Otros juegos (APKs)', 'APK', Color(0xFFF5A524)),
   Category('audio', 'TD - Audio', 'Audio', 'Audio', 'AUD', Color(0xFF4FD1D9)),
   Category('docs', 'TD - Documents', 'Documents', 'Documentos', 'DOC', Color(0xFF7C9CF5)),
   Category('compressed', 'TD - Compressed', 'Compressed', 'Comprimidos', 'ZIP', Color(0xFFB58CF2)),
   Category('other', 'TD - Other', 'Other', 'Otros', '···', Color(0xFF8C97AD)),
 ];
 
-const List<Category> romCategories = [
-  Category('rom_nes', 'TD - ROMs - NES', 'NES', 'NES', 'NES', _romColor, isRom: true),
-  Category('rom_snes', 'TD - ROMs - SNES', 'SNES', 'SNES', 'SNES', _romColor, isRom: true),
-  Category('rom_gb', 'TD - ROMs - Game Boy', 'Game Boy / Color', 'Game Boy / Color', 'GB', _romColor, isRom: true),
-  Category('rom_gba', 'TD - ROMs - GBA', 'Game Boy Advance', 'Game Boy Advance', 'GBA', _romColor, isRom: true),
-  Category('rom_n64', 'TD - ROMs - N64', 'Nintendo 64', 'Nintendo 64', 'N64', _romColor, isRom: true),
-  Category('rom_ds', 'TD - ROMs - DS', 'Nintendo DS', 'Nintendo DS', 'DS', _romColor, isRom: true),
-  Category('rom_3ds', 'TD - ROMs - 3DS', 'Nintendo 3DS', 'Nintendo 3DS', '3DS', _romColor, isRom: true),
-  Category('rom_gc', 'TD - ROMs - GameCube', 'GameCube', 'GameCube', 'GC', _romColor, isRom: true),
-  Category('rom_wii', 'TD - ROMs - Wii', 'Wii', 'Wii', 'WII', _romColor, isRom: true),
-  Category('rom_ps1', 'TD - ROMs - PS1', 'PlayStation', 'PlayStation', 'PS1', _romColor, isRom: true),
-  Category('rom_ps2', 'TD - ROMs - PS2', 'PlayStation 2', 'PlayStation 2', 'PS2', _romColor, isRom: true),
-  Category('rom_psp', 'TD - ROMs - PSP', 'PSP', 'PSP', 'PSP', _romColor, isRom: true),
-  Category('rom_genesis', 'TD - ROMs - Genesis', 'Genesis / Mega Drive', 'Genesis / Mega Drive', 'MD', _romColor, isRom: true),
+const _apkColor = Color(0xFFF5A524);
+
+/// "Games (APKs)" by console: the same consoles Tirso Compiler builds for. Channel names match the ones the
+/// Connected programs setup creates ("TD - N64 APKs", …), so they show up here automatically.
+const List<Category> apkCategories = [
+  Category('apk_n64', 'TD - N64 APKs', 'Nintendo 64', 'Nintendo 64', 'N64', _apkColor, isApk: true, logo: 'n64'),
+  Category('apk_gba', 'TD - GBA APKs', 'Game Boy Advance', 'Game Boy Advance', 'GBA', _apkColor, isApk: true, logo: 'gba'),
+  Category('apk_ds', 'TD - DS APKs', 'Nintendo DS', 'Nintendo DS', 'DS', _apkColor, isApk: true, logo: 'ds'),
+  Category('apk_gc', 'TD - GameCube APKs', 'GameCube', 'GameCube', 'GC', _apkColor, isApk: true, logo: 'gc'),
+  Category('apk_wii', 'TD - Wii APKs', 'Wii', 'Wii', 'WII', _apkColor, isApk: true, logo: 'wii'),
+  Category('apk_ps1', 'TD - PS1 APKs', 'PlayStation', 'PlayStation', 'PS1', _apkColor, isApk: true, logo: 'ps1'),
+  Category('apk_ps2', 'TD - PS2 APKs', 'PlayStation 2', 'PlayStation 2', 'PS2', _apkColor, isApk: true, logo: 'ps2'),
+  Category('apk_psp', 'TD - PSP APKs', 'PSP', 'PSP', 'PSP', _apkColor, isApk: true, logo: 'psp'),
 ];
 
-List<Category> get allCategories => [...libraryCategories, ...romCategories];
+const List<Category> romCategories = [
+  Category('rom_nes', 'TD - ROMs - NES', 'NES', 'NES', 'NES', _romColor, isRom: true, logo: 'nes'),
+  Category('rom_snes', 'TD - ROMs - SNES', 'SNES', 'SNES', 'SNES', _romColor, isRom: true, logo: 'snes'),
+  Category('rom_gb', 'TD - ROMs - Game Boy', 'Game Boy / Color', 'Game Boy / Color', 'GB', _romColor, isRom: true, logo: 'gb'),
+  Category('rom_gba', 'TD - ROMs - GBA', 'Game Boy Advance', 'Game Boy Advance', 'GBA', _romColor, isRom: true, logo: 'gba'),
+  Category('rom_n64', 'TD - ROMs - N64', 'Nintendo 64', 'Nintendo 64', 'N64', _romColor, isRom: true, logo: 'n64'),
+  Category('rom_ds', 'TD - ROMs - DS', 'Nintendo DS', 'Nintendo DS', 'DS', _romColor, isRom: true, logo: 'ds'),
+  Category('rom_3ds', 'TD - ROMs - 3DS', 'Nintendo 3DS', 'Nintendo 3DS', '3DS', _romColor, isRom: true, logo: '3ds'),
+  Category('rom_gc', 'TD - ROMs - GameCube', 'GameCube', 'GameCube', 'GC', _romColor, isRom: true, logo: 'gc'),
+  Category('rom_wii', 'TD - ROMs - Wii', 'Wii', 'Wii', 'WII', _romColor, isRom: true, logo: 'wii'),
+  Category('rom_ps1', 'TD - ROMs - PS1', 'PlayStation', 'PlayStation', 'PS1', _romColor, isRom: true, logo: 'ps1'),
+  Category('rom_ps2', 'TD - ROMs - PS2', 'PlayStation 2', 'PlayStation 2', 'PS2', _romColor, isRom: true, logo: 'ps2'),
+  Category('rom_psp', 'TD - ROMs - PSP', 'PSP', 'PSP', 'PSP', _romColor, isRom: true, logo: 'psp'),
+  Category('rom_genesis', 'TD - ROMs - Genesis', 'Genesis / Mega Drive', 'Genesis / Mega Drive', 'MD', _romColor, isRom: true, logo: 'genesis'),
+];
+
+List<Category> get allCategories => [...libraryCategories, ...apkCategories, ...romCategories];
 
 Category? categoryByKey(String key) {
   for (final c in allCategories) {
@@ -143,6 +165,7 @@ String extensionOf(String name) {
 String? routeFile(String name) {
   final ext = extensionOf(name);
   if (ambiguousExt.containsKey(ext)) return null;
+  if (_extToKey[ext] == 'games') return apkConsoleFromName(name) ?? 'games';
   return _extToKey[ext] ?? 'other';
 }
 
@@ -156,4 +179,27 @@ String mimeFor(String name) {
     'opus': 'audio/ogg', 'aac': 'audio/aac', 'epub': 'application/epub+zip',
   };
   return m[extensionOf(name)] ?? 'application/octet-stream';
+}
+
+/// Picks the console APK channel when the file name says which console it is ("Mario Kart DS.apk",
+/// "God of War PS2 TV.apk"); null when it doesn't (the file goes to "Other games" and can be moved).
+String? apkConsoleFromName(String name) {
+  final words = name.toLowerCase().replaceAll(RegExp(r'\.[a-z0-9]+$'), '').split(RegExp(r'[^a-z0-9]+')).where((w) => w.isNotEmpty).toList();
+  final text = ' ${words.join(' ')} ';
+  const hints = {
+    'apk_n64': ['n64', 'nintendo 64'],
+    'apk_gba': ['gba', 'game boy advance'],
+    'apk_ds': ['nds', 'ds', 'nintendo ds'],
+    'apk_gc': ['gamecube', 'game cube', 'gc'],
+    'apk_wii': ['wii'],
+    'apk_ps1': ['ps1', 'psx', 'playstation 1'],
+    'apk_ps2': ['ps2', 'playstation 2'],
+    'apk_psp': ['psp'],
+  };
+  for (final e in hints.entries) {
+    for (final h in e.value) {
+      if (text.contains(' $h ')) return e.key;
+    }
+  }
+  return null;
 }

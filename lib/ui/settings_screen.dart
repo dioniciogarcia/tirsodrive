@@ -304,7 +304,11 @@ class _AutostartSwitchState extends State<_AutostartSwitch> {
       value: _on,
       onChanged: (v) async {
         setState(() => _on = v);
-        await DesktopHost.setAutostart(v);
+        final err = await DesktopHost.setAutostart(v);
+        if (err != null && context.mounted) {
+          setState(() => _on = !v);
+          snack(context, err.isEmpty ? t('win_autostart_fail') : err);
+        }
       },
       title: Text(t('win_autostart'), style: TextStyle(fontSize: 14)),
       subtitle: Text(t('win_autostart_sub'), style: TextStyle(color: C.muted, fontSize: 12)),

@@ -59,6 +59,7 @@ class LibraryScreen extends StatelessWidget {
       listenable: drive,
       builder: (context, _) {
         final mine = drive.customChannels;
+        final apkCount = apkCategories.where((c) => drive.channelForKey(c.key) != null).length;
         final romCount = romCategories.where((c) => drive.channelForKey(c.key) != null).length;
         return Scaffold(
           floatingActionButton: FloatingActionButton(
@@ -106,6 +107,7 @@ class LibraryScreen extends StatelessWidget {
                     childAspectRatio: 1.75,
                     children: [
                       for (final c in libraryCategories)
+                        if (c.key != 'games')
                         _Tile(
                           tag: c.tag,
                           color: c.color,
@@ -113,6 +115,13 @@ class LibraryScreen extends StatelessWidget {
                           sub: drive.channelForKey(c.key) != null ? t('ready_channel') : t('not_created'),
                           onTap: () => _openKey(context, c.key),
                         ),
+                      _Tile(
+                        tag: 'APK',
+                        color: Color(0xFFF5A524),
+                        title: t('apks'),
+                        sub: apkCount > 0 ? '$apkCount / ${apkCategories.length}' : t('apks_sub'),
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ApksScreen(drive: drive))),
+                      ),
                       _Tile(
                         tag: 'ROM',
                         color: C.accent,
@@ -174,6 +183,7 @@ class RomsScreen extends StatelessWidget {
             for (final c in romCategories)
               _Row(
                 tag: c.tag,
+                logo: c.logoAsset,
                 title: c.label(appLang),
                 sub: drive.channelForKey(c.key) != null ? c.channelTitle : t('not_created'),
                 dim: drive.channelForKey(c.key) == null,
@@ -222,7 +232,8 @@ class _Row extends StatelessWidget {
   final String sub;
   final bool dim;
   final VoidCallback onTap;
-  const _Row({required this.tag, required this.title, required this.sub, required this.onTap, this.dim = false});
+  final String? logo;
+  const _Row({required this.tag, required this.title, required this.sub, required this.onTap, this.dim = false, this.logo});
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -231,7 +242,7 @@ class _Row extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 9, horizontal: 4),
         child: Row(children: [
-          ExtBadge(tag, color: dim ? C.label : C.accent, size: 42),
+          logo != null ? Opacity(opacity: dim ? 0.45 : 1, child: ConsoleLogo(logo!, size: 42)) : ExtBadge(tag, color: dim ? C.label : C.accent, size: 42),
           SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -242,6 +253,36 @@ class _Row extends StatelessWidget {
           ),
           Icon(Icons.chevron_right, color: C.label),
         ]),
+      ),
+    );
+  }
+}
+
+/// Games (APKs) by console, like the ROMs screen. "Other games" holds APKs that don't say which console they're for.
+class ApksScreen extends StatelessWidget {
+  final Drive drive;
+  const ApksScreen({super.key, required this.drive});
+  @override
+  Widget build(BuildContext context) {
+    final other = categoryByKey('games')!;
+    return ListenableBuilder(
+      listenable: drive,
+      builder: (context, _) => Scaffold(
+        appBar: AppBar(backgroundColor: C.bg, title: Text(t('section_apks'), style: TextStyle(fontFamily: displayFont))),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(18, 8, 18, 24),
+          children: [
+            for (final c in [...apkCategories, other])
+              _Row(
+                tag: c.tag,
+                logo: c.logoAsset,
+                title: c.label(appLang),
+                sub: drive.channelForKey(c.key) != null ? c.channelTitle : t('not_created'),
+                dim: drive.channelForKey(c.key) == null,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChannelScreen(drive: drive, categoryKey: c.key))),
+              ),
+          ],
+        ),
       ),
     );
   }

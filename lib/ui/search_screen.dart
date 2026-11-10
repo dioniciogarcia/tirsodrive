@@ -46,6 +46,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_where == 'all') return true;
     final cat = d.channelById(f.chatId)?.category;
     if (_where == 'roms') return cat?.isRom ?? false;
+    if (_where == 'apks') return (cat?.isApk ?? false) || cat?.key == 'games';
     if (_where.startsWith('key:')) return cat?.key == _where.substring(4);
     return _where == 'chat:${f.chatId}';
   }
@@ -148,7 +149,10 @@ class _SearchScreenState extends State<SearchScreen> {
             if (d.channelForKey(c.key) != null) ('key:${c.key}', c.label(appLang)),
           if (romCategories.any((c) => d.channelForKey(c.key) != null)) ('roms', t('f_all_roms')),
           for (final c in romCategories)
-            if (d.channelForKey(c.key) != null) ('key:${c.key}', 'ROMs · ${c.label(appLang)}'),
+            if (d.channelForKey(c.key) != null) ('key:${c.key}', c.full(appLang)),
+          if (apkCategories.any((c) => d.channelForKey(c.key) != null)) ('apks', t('f_all_apks')),
+          for (final c in apkCategories)
+            if (d.channelForKey(c.key) != null) ('key:${c.key}', c.full(appLang)),
           for (final ch in d.customChannels) ('chat:${ch.chatId}', ch.display),
         ];
         if (!whereOptions.any((o) => o.$1 == _where)) _where = 'all';

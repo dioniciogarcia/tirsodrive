@@ -25,7 +25,7 @@ class SyncScreen extends StatelessWidget {
         builder: (ctx, set) {
           final options = <(String, String)>[
             ('new', t('sync_new_channel', {'n': label})),
-            for (final c in allCategories) ('key:${c.key}', c.isRom ? 'ROMs · ${c.label(appLang)}' : c.label(appLang)),
+            for (final c in allCategories) ('key:${c.key}', c.full(appLang)),
             for (final ch in drive.customChannels) ('chat:${ch.chatId}', ch.display),
           ];
           return AlertDialog(

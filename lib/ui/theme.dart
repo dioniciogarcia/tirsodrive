@@ -232,3 +232,24 @@ class ConnectionDot extends StatelessWidget {
     );
   }
 }
+
+
+/// A console's PNG logo on a soft rounded tile (used for ROM and APK libraries).
+class ConsoleLogo extends StatelessWidget {
+  final String asset;
+  final double size;
+  const ConsoleLogo(this.asset, {super.key, this.size = 42});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.14),
+      decoration: BoxDecoration(
+        color: C.dark ? Color(0x1AFFFFFF) : Color(0x0F000000),
+        borderRadius: BorderRadius.circular(size * 0.25),
+      ),
+      child: Image.asset(asset, fit: BoxFit.contain, filterQuality: FilterQuality.medium, errorBuilder: (_, _, _) => SizedBox.shrink()),
+    );
+  }
+}

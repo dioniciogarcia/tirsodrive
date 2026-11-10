@@ -29,7 +29,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   String get _title {
     if (widget.categoryKey != null) {
       final c = categoryByKey(widget.categoryKey!)!;
-      return c.isRom ? 'ROMs · ${c.label(appLang)}' : c.label(appLang);
+      return c.full(appLang);
     }
     return d.channelById(widget.chatId!)?.display ?? '';
   }
