@@ -55,7 +55,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
+import androidx.compose.ui.unit.Velocity
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -95,6 +101,7 @@ sealed class Screen {
     data class Files(val title: String, val chat: Long, val preset: List<WFile>? = null) : Screen()
     data class Detail(val file: WFile) : Screen()
     data class Share(val file: WFile) : Screen()
+    object Profile : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -197,7 +204,8 @@ fun Library(s: Strings) {
         when (screen) {
             is Screen.Home -> HomePager(Tg.groups, s, onSearch,
                 onOpen = { g -> if (g.kids) push(Screen.Kids(g.key, g.title)) else push(Screen.Files(g.title, g.chatId)) },
-                onSignOut = { Tg.signOut() })
+                onProfile = { push(Screen.Profile) })
+            is Screen.Profile -> ProfileScreen(s)
             is Screen.Kids -> KidsList(screen, Tg.groups.filter { it.parent == screen.parent }) { g -> push(Screen.Files(g.title, g.chatId)) }
             is Screen.Files -> FileList(screen, s, onSearch) { push(Screen.Detail(it)) }
             is Screen.Detail -> Detail(screen.file, s) { push(Screen.Share(screen.file)) }
@@ -222,20 +230,34 @@ private fun logoRes(name: String?): Int? {
 /** Categories stacked vertically: swipe or turn the crown/bezel and each one snaps into place with a small springy "magnet". */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomePager(groups: List<Group>, s: Strings, onSearch: () -> Unit, onOpen: (Group) -> Unit, onSignOut: () -> Unit) {
+fun HomePager(groups: List<Group>, s: Strings, onSearch: () -> Unit, onOpen: (Group) -> Unit, onProfile: () -> Unit) {
     val top = groups.filter { it.parent == null }
-    val total = top.size + 2 // search, categories, sign out
+    val total = top.size + 2 // search, profile, categories
     val pager = rememberPagerState { total }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     val snap = spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
     val fling = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = snap)
     var lastTick = remember { 0L }
+    var pull by remember { mutableStateOf(0f) }
+    val pullConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (pager.currentPage == 0 && available.y > 0f) {
+                    pull += available.y
+                    if (pull > 140f) { pull = 0f; Tg.refresh() }
+                } else if (available.y < 0f) pull = 0f
+                return Offset.Zero
+            }
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity { pull = 0f; return Velocity.Zero }
+        }
+    }
     LaunchedEffect(Unit) { try { focus.requestFocus() } catch (_: Exception) {} }
     Box(Modifier.fillMaxSize()) {
         VerticalPager(
             state = pager, flingBehavior = fling,
             modifier = Modifier.fillMaxSize()
+                .nestedScroll(pullConnection)
                 .onRotaryScrollEvent { ev ->
                     val now = System.currentTimeMillis()
                     if (now - lastTick > 140) {
@@ -248,11 +270,11 @@ fun HomePager(groups: List<Group>, s: Strings, onSearch: () -> Unit, onOpen: (Gr
                 .focusRequester(focus).focusable(),
         ) { page ->
             val offset = abs((pager.currentPage - page) + pager.currentPageOffsetFraction)
-            val g = top.getOrNull(page - 1)
+            val g = top.getOrNull(page - 2)
             Column(
                 Modifier.fillMaxSize().scale(1f - offset * 0.2f).alpha(1f - offset * 0.65f)
                     .combinedClickable(
-                        onClick = { when { page == 0 -> onSearch(); g != null -> onOpen(g); else -> onSignOut() } },
+                        onClick = { when { page == 0 -> onSearch(); g != null -> onOpen(g); else -> onProfile() } },
                         onLongClick = onSearch,
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
@@ -269,12 +291,15 @@ fun HomePager(groups: List<Group>, s: Strings, onSearch: () -> Unit, onOpen: (Gr
                         if (g.kids) Text("›", color = Muted, fontSize = 14.sp)
                     }
                     else -> {
-                        Text("⎋", fontSize = 34.sp)
-                        Text(s.signOut, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+                        Text("👤", fontSize = 40.sp)
+                        Text(s.profile, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.padding(top = 6.dp))
+                        Text(Tg.me?.name ?: "", color = Muted, fontSize = 12.sp, maxLines = 1)
+                        if (top.isEmpty()) Text(s.pullHint, color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp, start = 26.dp, end = 26.dp))
                     }
                 }
             }
         }
+        if (Tg.refreshing) CircularProgressIndicator(Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(18.dp), indicatorColor = Accent, strokeWidth = 2.dp)
         // position dots, on the right edge because the pages move up and down
         Column(Modifier.align(Alignment.CenterEnd).padding(end = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             val from = (pager.currentPage - 3).coerceAtLeast(0)
@@ -409,3 +434,24 @@ private fun ContactChip(c: Contact, onClick: () -> Unit) = Chip(
     colors = ChipDefaults.chipColors(backgroundColor = Card),
     modifier = Modifier.fillMaxSize(),
 )
+
+@Composable
+fun ProfileScreen(s: Strings) {
+    val me = Tg.me
+    val bmp = remember(me?.photo) { me?.photo?.let { try { BitmapFactory.decodeFile(it)?.asImageBitmap() } catch (_: Exception) { null } } }
+    ScalingLazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Box(Modifier.size(64.dp).clip(CircleShape).background(Card), contentAlignment = Alignment.Center) {
+                if (bmp != null) Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else Text((me?.name?.firstOrNull() ?: '?').toString(), fontSize = 28.sp, color = Accent)
+            }
+        }
+        item { Text(me?.name ?: "", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
+        if (!me?.username.isNullOrEmpty()) item { Text("@${me!!.username}", color = Accent, fontSize = 13.sp) }
+        if (!me?.phone.isNullOrEmpty()) item { Text("+${me!!.phone}", color = Muted, fontSize = 12.sp) }
+        item { Text("${Tg.groups.count { it.chatId != 0L }} ${if (Tg.es) "bibliotecas" else "libraries"}", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+        if (Tg.note.isNotEmpty()) item { Text(Tg.note, color = Muted, fontSize = 9.sp) }
+        item { Chip(onClick = { Tg.refresh() }, label = { Text(s.refresh) }, colors = ChipDefaults.secondaryChipColors(), modifier = Modifier.padding(top = 8.dp).fillMaxSize()) }
+        item { Chip(onClick = { Tg.signOut() }, label = { Text(s.signOut) }, colors = ChipDefaults.chipColors(backgroundColor = Card), modifier = Modifier.fillMaxSize()) }
+    }
+}

@@ -23,6 +23,8 @@ sealed class Auth {
     object Ready : Auth()
 }
 
+data class Profile(val name: String, val username: String, val phone: String, val photo: String?)
+
 class Page(val files: List<WFile>, val next: Long, val done: Boolean)
 
 /** The watch's own Telegram session (logged in by QR) and everything it reads from it. */
@@ -72,7 +74,7 @@ object Tg {
                         put("system_language_code", Locale.getDefault().language)
                         put("device_model", "TirsoDrive (Watch)")
                         put("system_version", "Wear OS")
-                        put("application_version", "0.13.0")
+                        put("application_version", "0.13.1")
                     }
                     "authorizationStateWaitPhoneNumber" -> {
                         auth = Auth.Qr(null)
@@ -80,7 +82,7 @@ object Tg {
                     }
                     "authorizationStateWaitOtherDeviceConfirmation" -> auth = Auth.Qr(st.optString("link"))
                     "authorizationStateWaitPassword" -> auth = Auth.Password(st.optString("password_hint"))
-                    "authorizationStateReady" -> { auth = Auth.Loading; loadAll(); auth = Auth.Ready }
+                    "authorizationStateReady" -> { auth = Auth.Loading; try { loadAll() } catch (_: Exception) {}; auth = Auth.Ready }
                     "authorizationStateLoggingOut", "authorizationStateClosed" -> { groups = emptyList(); chats.clear(); contactsCache = null; auth = Auth.Qr(null) }
                     else -> {}
                 }
@@ -103,18 +105,63 @@ object Tg {
 
     // ------------------------------------------------------------ library
 
+    var refreshing by mutableStateOf(false)
+    var me by mutableStateOf<Profile?>(null)
+    var note by mutableStateOf("")
+
+    private suspend fun loadList(list: String) {
+        repeat(12) {
+            try {
+                Td.call("loadChats") { put("chat_list", JSONObject().put("@type", list)); put("limit", 100) }
+            } catch (e: TdError) {
+                if (e.code == 404) return
+            }
+        }
+    }
+
+    private suspend fun idsOf(list: String): List<Long> = try {
+        val a = Td.call("getChats") { put("chat_list", JSONObject().put("@type", list)); put("limit", 500) }.optJSONArray("chat_ids")
+        List(a?.length() ?: 0) { a!!.getLong(it) }
+    } catch (_: Exception) { emptyList() }
+
+    private suspend fun chatOf(id: Long): JSONObject? = chats[id] ?: try {
+        Td.call("getChat") { put("chat_id", id) }.also { chats[id] = it }
+    } catch (_: Exception) { null }
+
+    fun refresh() {
+        if (refreshing) return
+        refreshing = true
+        scope.launch { try { contactsCache = null; loadAll() } catch (_: Exception) {} ; refreshing = false }
+    }
+
     private suspend fun loadAll() {
-        myId = Td.call("getMe").optLong("id")
-        try { Td.call("loadChats") { put("chat_list", JSONObject().put("@type", "chatListMain")); put("limit", 300) } } catch (_: Exception) {}
-        val ids = Td.call("getChats") { put("chat_list", JSONObject().put("@type", "chatListMain")); put("limit", 500) }.optJSONArray("chat_ids")
-        recentIds = List(ids?.length() ?: 0) { ids!!.getLong(it) }
+        try {
+            val u = Td.call("getMe")
+            myId = u.optLong("id")
+            val name = listOf(u.optString("first_name"), u.optString("last_name")).filter { it.isNotEmpty() }.joinToString(" ")
+            val un = u.optJSONObject("usernames")?.optJSONArray("active_usernames")?.optString(0) ?: ""
+            me = Profile(name, un, u.optString("phone_number"), me?.photo)
+            loadPhoto(u.optJSONObject("profile_photo")?.optJSONObject("small")?.optInt("id") ?: 0)
+        } catch (_: Exception) {}
+        loadList("chatListMain")
+        loadList("chatListArchive")
+        val main = idsOf("chatListMain")
+        recentIds = main
+        val all = LinkedHashSet<Long>(main)
+        all.addAll(idsOf("chatListArchive"))
+        // fallback: find the channels by name if the chat lists didn't include them
+        try {
+            val r = Td.call("searchChats") { put("query", "TD -"); put("limit", 100) }.optJSONArray("chat_ids")
+            for (i in 0 until (r?.length() ?: 0)) all.add(r!!.getLong(i))
+        } catch (_: Exception) {}
         val found = ArrayList<Pair<Cat, Long>>()
-        for (id in recentIds) {
-            val c = chats[id] ?: continue
+        for (id in all) {
+            val c = chatOf(id) ?: continue
             if (!isChannel(c)) continue
             val cat = Cats.byTitle(c.optString("title")) ?: continue
             found.add(cat to id)
         }
+        note = "${all.size} chats · ${found.size} libraries"
         fun rank(c: Cat) = when (c.kind) { 1 -> 300; 2 -> 400; else -> Cats.all.filter { it.kind == 0 }.indexOf(c) * 10 }
         found.sortBy { rank(it.first) }
         val out = ArrayList<Group>()
@@ -122,9 +169,18 @@ object Tg {
             out.add(Group(cat.key, if (es) cat.es else cat.en, id, if (cat.kind == 1) "apks" else if (cat.kind == 2) "roms" else null, cat.logo, -1, false))
         }
         fun at(parent: String) = out.indexOfFirst { it.parent == parent }
-        if (at("roms") >= 0) out.add(at("roms"), Group("roms", if (es) "ROMs" else "ROMs", 0, null, null, -1, true))
+        if (at("roms") >= 0) out.add(at("roms"), Group("roms", "ROMs", 0, null, null, -1, true))
         if (at("apks") >= 0) out.add(at("apks"), Group("apks", if (es) "Juegos (APKs)" else "Games (APKs)", 0, null, null, -1, true))
         groups = out
+    }
+
+    private suspend fun loadPhoto(fileId: Int) {
+        if (fileId == 0) return
+        try {
+            val f = Td.call("downloadFile") { put("file_id", fileId); put("priority", 1); put("offset", 0); put("limit", 0); put("synchronous", true) }
+            val path = f.optJSONObject("local")?.optString("path") ?: ""
+            if (path.isNotEmpty()) me = me?.copy(photo = path)
+        } catch (_: Exception) {}
     }
 
     private fun isChannel(c: JSONObject): Boolean {
