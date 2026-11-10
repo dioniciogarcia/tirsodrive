@@ -1,7 +1,6 @@
-// Android: everything the watch app and the "TirsoDrive in the file picker" storage location need from this app.
+// Android: everything the "TirsoDrive in the file picker" storage location needs from this app.
 //  - keeps a small index file (td_index.json) up to date: categories, files, favorite contacts
 //  - uploads files that other apps saved into TirsoDrive (the inbox)
-//  - sends files to the watch's favorite contacts when the watch asks
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -29,7 +28,6 @@ class PhoneBridge {
     d.addListener(_changed);
     _changed();
     scanInbox();
-    handleWearShares();
   }
 
   void _changed() {
@@ -38,9 +36,6 @@ class PhoneBridge {
   }
 
   // ---------------------------------------------------------------- index
-
-  DateTime? _contactsAt;
-  List<ShareTarget> _contacts = [];
 
   Future<void> writeIndex() async {
     if (d.step != AuthStep.ready) return;
@@ -86,17 +81,7 @@ class PhoneBridge {
       if (files.length >= 6000) break;
       files.add({'i': f.messageId, 'c': f.chatId, 'n': f.name, 's': f.size, 'd': f.date, 'm': f.mime});
     }
-    // contacts for the watch: recent chats (same list as the phone's share picker) + everyone, for searching
-    final chats = d.shareChats();
-    final recent = chats.take(25).map((e) => {'id': e.chatId, 'name': e.title}).toList();
-    if (_contactsAt == null || DateTime.now().difference(_contactsAt!).inMinutes > 60) {
-      _contactsAt = DateTime.now();
-      _contacts = await d.shareContacts(chats.map((e) => e.chatId).toSet());
-    }
-    final all = <Map<String, dynamic>>[
-      for (final c in [...chats, ..._contacts].take(1500)) {'id': c.chatId, 'name': c.title}
-    ];
-    final body = jsonEncode({'v': 1, 'lang': appLang, 'groups': groups, 'files': files, 'recent': recent, 'all': all});
+    final body = jsonEncode({'v': 1, 'lang': appLang, 'groups': groups, 'files': files});
     if (body == _lastIndex) return;
     _lastIndex = body;
     final out = File('${(await _dir).path}${Platform.pathSeparator}td_index.json');
@@ -129,26 +114,6 @@ class PhoneBridge {
         }
       }
       if (again) Timer(const Duration(seconds: 6), scanInbox);
-    } catch (_) {}
-  }
-
-  // ---------------------------------------------------------------- watch → share a file to a favorite contact
-
-  Future<void> handleWearShares() async {
-    try {
-      final f = File('${(await _dir).path}${Platform.pathSeparator}wear_share.json');
-      if (!f.existsSync()) return;
-      final list = jsonDecode(await f.readAsString()) as List;
-      await f.delete();
-      for (final r in list) {
-        final m = r as Map<String, dynamic>;
-        final to = (m['to'] as num).toInt();
-        final file = d.allFiles.where((x) => x.chatId == (m['c'] as num).toInt() && x.messageId == (m['i'] as num).toInt()).firstOrNull;
-        if (file == null) continue;
-        final known = d.shareChats().where((e) => e.chatId == to).firstOrNull ?? _contacts.where((e) => e.chatId == to).firstOrNull;
-        if (known == null) continue; // only people/chats from the phone's own lists
-        await d.sendToChat(known, [file]);
-      }
     } catch (_) {}
   }
 }

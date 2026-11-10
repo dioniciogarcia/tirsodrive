@@ -220,12 +220,11 @@ class NativeBridge {
   }
 
   /// Calls [onTogglePause] when the notification's Pause/Resume button is tapped.
-  static void listen({required void Function() onTogglePause, void Function()? onInbox, void Function()? onWearShare}) {
+  static void listen({required void Function() onTogglePause, void Function()? onInbox}) {
     if (!Platform.isAndroid) return;
     _ch.setMethodCallHandler((call) async {
       if (call.method == 'togglePause') onTogglePause();
       if (call.method == 'inboxChanged') onInbox?.call();
-      if (call.method == 'wearShare') onWearShare?.call();
       return null;
     });
   }

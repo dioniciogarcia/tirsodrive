@@ -24,7 +24,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.12.0';
+const String appVersion = '0.12.1';
 
 class DriveChannel {
   final int chatId;
@@ -193,9 +193,8 @@ class Drive extends ChangeNotifier {
   bool ruleWifi = false;
   bool keepInTray = true; // Windows: closing the window keeps TirsoDrive running in the tray
   DesktopHost? desktop;
-  PhoneBridge? phone; // Android: watch + file-picker storage support
-  List<(int, String)> watchFavorites = []; // contacts the watch may send files to (chosen on the phone)
-  bool watchSupport = true;
+  PhoneBridge? phone; // Android: file-picker storage support
+  bool pickerIndex = true;
   bool ruleCharging = false;
   int quietFrom = -1; // hour 0-23, -1 = off
   int quietTo = -1;
@@ -251,10 +250,7 @@ class Drive extends ChangeNotifier {
     sortMode = _prefs.getString('sortMode') ?? sortMode;
     ruleWifi = _prefs.getBool('ruleWifi') ?? false;
     keepInTray = _prefs.getBool('keepInTray') ?? true;
-    watchSupport = _prefs.getBool('watchSupport') ?? true;
-    try {
-      watchFavorites = [for (final e in jsonDecode(_prefs.getString('watchFavs') ?? '[]') as List) ((e['id'] as num).toInt(), e['name'] as String)];
-    } catch (_) {}
+    pickerIndex = _prefs.getBool('pickerIndex') ?? true;
     ruleCharging = _prefs.getBool('ruleCharging') ?? false;
     quietFrom = _prefs.getInt('quietFrom') ?? -1;
     quietTo = _prefs.getInt('quietTo') ?? -1;
@@ -266,7 +262,7 @@ class Drive extends ChangeNotifier {
       apiHash = _prefs.getString('apiHash') ?? '';
     }
     td.updates.listen(_onUpdate);
-    NativeBridge.listen(onTogglePause: togglePause, onInbox: () => phone?.scanInbox(), onWearShare: () => phone?.handleWearShares());
+    NativeBridge.listen(onTogglePause: togglePause, onInbox: () => phone?.scanInbox());
     NativeBridge.serviceStop(); // clear any leftover notification from a previous run
     if (apiId == 0 || apiHash.isEmpty) {
       step = AuthStep.needApi;
@@ -324,16 +320,9 @@ class Drive extends ChangeNotifier {
     themeTick.value++;
   }
 
-  void setWatchSupport(bool v) {
-    _prefs.setBool('watchSupport', watchSupport = v);
+  void setPickerIndex(bool v) {
+    _prefs.setBool('pickerIndex', pickerIndex = v);
     notifyListeners();
-  }
-
-  void setWatchFavorites(List<(int, String)> v) {
-    watchFavorites = v;
-    _prefs.setString('watchFavs', jsonEncode([for (final e in v) {'id': e.$1, 'name': e.$2}]));
-    notifyListeners();
-    phone?.writeIndex();
   }
 
   void setKeepInTray(bool v) {
@@ -683,7 +672,7 @@ class Drive extends ChangeNotifier {
     if (Platform.isAndroid && !isTv) {
       phone ??= PhoneBridge(this);
       phone!.start();
-      if (watchSupport) unawaited(loadAllChannels()); // so the watch can browse and search everything
+      if (pickerIndex) unawaited(loadAllChannels()); // so the file picker can show everything
     }
   }
 

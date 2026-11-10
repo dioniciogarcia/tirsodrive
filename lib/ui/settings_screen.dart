@@ -69,41 +69,6 @@ class SettingsScreen extends StatelessWidget {
     if (ok == true) await drive.setVaultPassword(a.text);
   }
 
-  Future<void> _pickFavorites(BuildContext context) async {
-    final chats = drive.shareChats().where((c) => c.chatId != drive.myId).toList();
-    final chosen = {for (final e in drive.watchFavorites) e.$1: e.$2};
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: Text(t('watch_favs'), style: TextStyle(fontFamily: displayFont)),
-          content: SizedBox(
-            width: 420,
-            height: 420,
-            child: ListView(children: [
-              Text(t('watch_favs_help'), style: TextStyle(color: C.muted, fontSize: 12)),
-              for (final c in chats.take(80))
-                CheckboxListTile(
-                  dense: true,
-                  value: chosen.containsKey(c.chatId),
-                  title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  onChanged: (v) => setS(() {
-                    if (v == true) {
-                      if (chosen.length < 6) chosen[c.chatId] = c.title;
-                    } else {
-                      chosen.remove(c.chatId);
-                    }
-                  }),
-                ),
-            ]),
-          ),
-          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: Text(t('done')))],
-        ),
-      ),
-    );
-    drive.setWatchFavorites([for (final e in chosen.entries) (e.key, e.value)]);
-  }
-
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -221,24 +186,15 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 24),
                 if (Platform.isAndroid && !drive.isTv) ...[
-                  SectionLabel(t('watch_title')),
+                  SectionLabel(t('picker_title')),
                   SizedBox(height: 6),
-                  Text(t('watch_intro'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
+                  Text(t('picker_intro'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    value: drive.watchSupport,
-                    onChanged: drive.setWatchSupport,
-                    title: Text(t('watch_switch'), style: TextStyle(fontSize: 14)),
-                    subtitle: Text(t('watch_switch_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.star_outline, color: C.amber),
-                    title: Text(t('watch_favs'), style: TextStyle(fontSize: 14)),
-                    subtitle: Text(drive.watchFavorites.isEmpty ? t('watch_favs_none') : drive.watchFavorites.map((e) => e.$2).join(', '),
-                        maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12)),
-                    trailing: Icon(Icons.chevron_right),
-                    onTap: () => _pickFavorites(context),
+                    value: drive.pickerIndex,
+                    onChanged: drive.setPickerIndex,
+                    title: Text(t('picker_switch'), style: TextStyle(fontSize: 14)),
+                    subtitle: Text(t('picker_switch_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
                   ),
                   SizedBox(height: 8),
                   Text(t('picker_note'), style: TextStyle(color: C.muted, fontSize: 12, height: 1.4)),
