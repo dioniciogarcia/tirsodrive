@@ -104,7 +104,6 @@ class DesktopHost with TrayListener, WindowListener {
     if (startHidden) {
       if (trayOk) {
         await windowManager.hide();
-        await windowManager.setSkipTaskbar(true);
       } else {
         await showMain(); // never leave the app invisible without a tray icon to bring it back
       }
@@ -135,33 +134,47 @@ class DesktopHost with TrayListener, WindowListener {
 
   // ---------------- window modes
 
+  bool _cardStyle = false;
+
+  Future<void> _step(String name, Future<void> Function() f) async {
+    await log('step $name');
+    try {
+      await f();
+    } catch (e) {
+      await log('step $name failed: $e');
+    }
+  }
+
   Future<void> showMain() async {
+    await log('showMain');
     card.value = false;
-    await windowManager.setAlwaysOnTop(false);
-    await windowManager.setSkipTaskbar(false);
-    await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-    await windowManager.setSize(const Size(1360, 860));
-    await windowManager.center();
-    await windowManager.show();
-    await windowManager.focus();
+    if (_cardStyle) {
+      _cardStyle = false;
+      await _step('alwaysOnTop off', () => windowManager.setAlwaysOnTop(false));
+      await _step('titlebar normal', () => windowManager.setTitleBarStyle(TitleBarStyle.normal));
+      await _step('size', () => windowManager.setSize(const Size(1360, 860)));
+      await _step('center', () => windowManager.center());
+    }
+    await _step('show', () => windowManager.show());
+    await _step('focus', () => windowManager.focus());
   }
 
   Future<void> showCard() async {
+    await log('showCard');
     card.value = true;
-    await windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false);
-    await windowManager.setSize(const Size(380, 520));
-    await windowManager.setAlignment(Alignment.bottomRight);
-    await windowManager.setSkipTaskbar(true);
-    await windowManager.setAlwaysOnTop(true);
-    await windowManager.show();
-    await windowManager.focus();
+    _cardStyle = true;
+    await _step('titlebar hidden', () => windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false));
+    await _step('size', () => windowManager.setSize(const Size(380, 520)));
+    await _step('align', () => windowManager.setAlignment(Alignment.bottomRight));
+    await _step('alwaysOnTop', () => windowManager.setAlwaysOnTop(true));
+    await _step('show', () => windowManager.show());
+    await _step('focus', () => windowManager.focus());
   }
 
   Future<void> hideAll() async {
+    await log('hideAll');
     card.value = false;
-    await windowManager.setAlwaysOnTop(false);
-    await windowManager.setSkipTaskbar(true);
-    await windowManager.hide();
+    await _step('hide', () => windowManager.hide());
   }
 
   Future<void> quit() async {
