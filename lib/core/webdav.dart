@@ -180,6 +180,19 @@ class WebDavDrive {
 
   // ---------------- requests
 
+  int _logged = 0;
+
+  /// Sends an XML answer the way IIS/Apache do: text/xml, an exact Content-Length (no chunking).
+  Future<void> _sendXml(HttpResponse res, int status, String body) async {
+    final bytes = utf8.encode(body);
+    res.statusCode = status;
+    res.headers.set('Content-Type', 'text/xml; charset="utf-8"');
+    res.contentLength = bytes.length;
+    res.add(bytes);
+    if (_logged++ < 12) DesktopHost.log('webdav answered $status (${bytes.length} bytes): ${body.length > 700 ? body.substring(0, 700) : body}');
+    await res.close();
+  }
+
   Future<void> _handle(HttpRequest req) async {
     final res = req.response;
     res.headers.set('MS-Author-Via', 'DAV');
@@ -189,27 +202,22 @@ class WebDavDrive {
         res.headers
           ..set('DAV', '1, 2')
           ..set('Allow', 'OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, MOVE, COPY, LOCK, UNLOCK');
+        res.contentLength = 0;
         await res.close();
         return;
       case 'PROPFIND':
         await _propfind(req, seg);
         return;
       case 'PROPPATCH':
-        res.statusCode = 207;
-        res.headers.contentType = ContentType('application', 'xml', charset: 'utf-8');
-        res.write('<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:"><D:response><D:href>${_href(seg, false)}</D:href>'
+        await _sendXml(res, 207, '<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:"><D:response><D:href>${_href(seg, false)}</D:href>'
             '<D:propstat><D:prop/><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>');
-        await res.close();
         return;
       case 'LOCK':
         final token = 'opaquelocktoken:${DateTime.now().microsecondsSinceEpoch}';
-        res.statusCode = 200;
         res.headers.set('Lock-Token', '<$token>');
-        res.headers.contentType = ContentType('application', 'xml', charset: 'utf-8');
-        res.write('<?xml version="1.0" encoding="utf-8"?><D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock>'
+        await _sendXml(res, 200, '<?xml version="1.0" encoding="utf-8"?><D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock>'
             '<D:locktype><D:write/></D:locktype><D:lockscope><D:exclusive/></D:lockscope><D:depth>0</D:depth>'
             '<D:timeout>Second-3600</D:timeout><D:locktoken><D:href>$token</D:href></D:locktoken></D:activelock></D:lockdiscovery></D:prop>');
-        await res.close();
         return;
       case 'UNLOCK':
         res.statusCode = 204;
@@ -280,6 +288,7 @@ class WebDavDrive {
         '<D:resourcetype>${folder ? '<D:collection/>' : ''}</D:resourcetype>'
         '${folder ? '' : '<D:getcontentlength>$size</D:getcontentlength><D:getcontenttype>${_esc(mime ?? 'application/octet-stream')}</D:getcontenttype>'}'
         '<D:getlastmodified>$when</D:getlastmodified><D:creationdate>${(time ?? DateTime.now()).toUtc().toIso8601String()}</D:creationdate>'
+        '<D:supportedlock><D:lockentry><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock>'
         '</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>';
   }
 
@@ -287,8 +296,9 @@ class WebDavDrive {
 
   Future<void> _propfind(HttpRequest req, List<String> seg) async {
     final res = req.response;
-    await req.drain<void>();
+    final reqBody = await utf8.decodeStream(req);
     final depth = req.headers.value('Depth') ?? '1';
+    if (_logged < 12) DesktopHost.log('webdav PROPFIND ${req.uri} depth=$depth body: ${reqBody.length > 500 ? reqBody.substring(0, 500) : reqBody}');
     final b = StringBuffer('<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:">');
     if (seg.isEmpty) {
       b.write(_entry(const [], folder: true));
@@ -334,10 +344,7 @@ class WebDavDrive {
       }
     }
     b.write('</D:multistatus>');
-    res.statusCode = 207;
-    res.headers.contentType = ContentType('application', 'xml', charset: 'utf-8');
-    res.write(b.toString());
-    await res.close();
+    await _sendXml(res, 207, b.toString());
   }
 
   String _displayName(Map<String, DriveFile> files, DriveFile f) {

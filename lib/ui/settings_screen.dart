@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../core/desktop.dart';
 import '../core/drive.dart';
@@ -275,6 +276,16 @@ class SettingsScreen extends StatelessWidget {
                     onChanged: drive.setKeepInTray,
                     title: Text(t('win_tray'), style: TextStyle(fontSize: 14)),
                     subtitle: Text(t('win_tray_sub'), style: TextStyle(color: C.muted, fontSize: 12)),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.folder_open),
+                    title: Text('Open log folder', style: TextStyle(fontSize: 14)),
+                    subtitle: Text('desktop.log — send it if something misbehaves', style: TextStyle(color: C.muted, fontSize: 12)),
+                    onTap: () async {
+                      final dir = await getApplicationSupportDirectory();
+                      await Process.run('explorer', [dir.path]);
+                    },
                   ),
                   SizedBox(height: 24),
                 ],

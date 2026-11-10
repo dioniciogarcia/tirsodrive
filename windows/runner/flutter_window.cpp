@@ -1,6 +1,8 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <windows.h>
+#include <string>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -54,6 +56,20 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // Close-to-tray, done natively so it never depends on Dart being responsive: when the app has
+  // written its "tray is ready" flag file, the Close button only hides the window.
+  if (message == WM_CLOSE) {
+    wchar_t tmp[MAX_PATH];
+    DWORD n = GetTempPathW(MAX_PATH, tmp);
+    if (n > 0 && n < MAX_PATH) {
+      std::wstring flag = std::wstring(tmp) + L"tirsodrive-tray.flag";
+      if (GetFileAttributesW(flag.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        ShowWindow(hwnd, SW_HIDE);
+        return 0;
+      }
+    }
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

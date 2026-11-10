@@ -25,7 +25,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.11.0';
+const String appVersion = '0.11.1';
 
 class DriveChannel {
   final int chatId;

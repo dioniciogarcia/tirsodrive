@@ -58,6 +58,17 @@ class DesktopHost with TrayListener, WindowListener {
 
   bool trayOk = false;
 
+  static File get _flag => File(p.join(Directory.systemTemp.path, 'tirsodrive-tray.flag'));
+
+  /// The native runner reads this file: present = the Close button only hides the window.
+  void _syncFlag() {
+    try {
+      final want = trayOk && d.keepInTray && !_quitting;
+      if (want && !_flag.existsSync()) _flag.writeAsStringSync('1');
+      if (!want && _flag.existsSync()) _flag.deleteSync();
+    } catch (_) {}
+  }
+
   // ---------------- setup
 
   /// Called a moment after the first frame, when the native window and its plugins are fully ready.
@@ -88,6 +99,8 @@ class DesktopHost with TrayListener, WindowListener {
     }
     d.addListener(_refresh);
     _ready = true;
+    _syncFlag();
+    await log('keep in tray: ${d.keepInTray}, flag: ${_flag.existsSync()}');
     if (startHidden) {
       if (trayOk) {
         await windowManager.hide();
@@ -102,6 +115,7 @@ class DesktopHost with TrayListener, WindowListener {
 
   void _refresh() {
     if (!_ready) return;
+    _syncFlag();
     final active = d.transfers.where((x) => !x.finished).length;
     final tip = active == 0 ? 'TirsoDrive' : 'TirsoDrive · ${t('tray_active', {'n': active})}';
     if (tip != _lastTip) {
@@ -152,7 +166,9 @@ class DesktopHost with TrayListener, WindowListener {
 
   Future<void> quit() async {
     _quitting = true;
-    await trayManager.destroy();
+    _syncFlag();
+    await log('quit');
+    try { await trayManager.destroy(); } catch (_) {}
     await windowManager.setPreventClose(false);
     await windowManager.destroy();
     exit(0);
@@ -162,6 +178,7 @@ class DesktopHost with TrayListener, WindowListener {
 
   @override
   void onWindowClose() async {
+    await log('close event (keepInTray ${d.keepInTray}, trayOk $trayOk)');
     if (_quitting) return;
     if (d.keepInTray && trayOk) {
       await hideAll(); // keep running: uploads and folder sync go on in the background
