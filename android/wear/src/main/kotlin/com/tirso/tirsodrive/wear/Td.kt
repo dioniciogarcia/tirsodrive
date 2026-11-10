@@ -53,7 +53,7 @@ object Td {
         pending[id] = d
         req.put("@extra", id)
         lib!!.td_send(client, req.toString())
-        val r = d.await()
+        val r = try { kotlinx.coroutines.withTimeout(25000) { d.await() } } catch (e: kotlinx.coroutines.TimeoutCancellationException) { pending.remove(id); throw TdError(408, "timeout") }
         if (r.optString("@type") == "error") throw TdError(r.optInt("code"), r.optString("message"))
         return r
     }

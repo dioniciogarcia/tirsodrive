@@ -335,6 +335,7 @@ fun FileList(screen: Screen.Files, s: Strings, onSearch: () -> Unit, onOpen: (WF
     var next by remember { mutableStateOf(0L) }
     var done by remember { mutableStateOf(screen.preset != null) }
     var busy by remember { mutableStateOf(screen.preset == null) }
+    var err by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     fun loadMore() {
@@ -345,7 +346,7 @@ fun FileList(screen: Screen.Files, s: Strings, onSearch: () -> Unit, onOpen: (WF
                 files = files + p.files
                 next = p.next
                 done = p.done
-            } catch (_: Exception) { done = true }
+            } catch (e: Exception) { done = true; err = e.message ?: "error" }
             busy = false
         }
     }
@@ -354,7 +355,7 @@ fun FileList(screen: Screen.Files, s: Strings, onSearch: () -> Unit, onOpen: (WF
     ScalingLazyColumn(Modifier.fillMaxSize()) {
         item { Text(screen.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 4.dp)) }
         item { Chip(onClick = onSearch, label = { Text("🔍 ${s.search}") }, colors = ChipDefaults.secondaryChipColors(), modifier = Modifier.fillMaxSize()) }
-        if (files.isEmpty() && !busy) item { Text(s.empty, color = Muted) }
+        if (files.isEmpty() && !busy) item { Text(err ?: s.empty, color = Muted, textAlign = TextAlign.Center) }
         items(files) { f ->
             Chip(
                 onClick = { onOpen(f) },

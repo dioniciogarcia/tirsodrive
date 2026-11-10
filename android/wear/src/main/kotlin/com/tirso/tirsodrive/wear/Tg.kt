@@ -67,14 +67,14 @@ object Tg {
                         put("database_encryption_key", "")
                         put("use_file_database", false)
                         put("use_chat_info_database", true)
-                        put("use_message_database", false)
+                        put("use_message_database", true)
                         put("use_secret_chats", false)
                         put("api_id", 38798734)
                         put("api_hash", "dee69532c862a3a3975eda119ba52223")
                         put("system_language_code", Locale.getDefault().language)
                         put("device_model", "TirsoDrive (Watch)")
                         put("system_version", "Wear OS")
-                        put("application_version", "0.13.1")
+                        put("application_version", "0.13.2")
                     }
                     "authorizationStateWaitPhoneNumber" -> {
                         auth = Auth.Qr(null)
@@ -217,15 +217,21 @@ object Tg {
         var next = from
         var rounds = 0
         var empty = 0
-        while (out.size < 25 && rounds++ < 6 && empty < 2) {
+        while (out.size < 25 && rounds++ < 12 && empty < 4) {
             val msgs = Td.call("getChatHistory") {
-                put("chat_id", chat); put("from_message_id", next); put("offset", 0); put("limit", 40); put("only_local", false)
+                put("chat_id", chat); put("from_message_id", next); put("offset", 0); put("limit", 50); put("only_local", false)
             }.optJSONArray("messages")
-            if (msgs == null || msgs.length() == 0) { empty++; if (next == 0L) break; continue }
+            if (msgs == null || msgs.length() == 0) {
+                // the first answer for a chat that was never opened is often empty while TDLib fetches it: ask again
+                empty++
+                kotlinx.coroutines.delay(600)
+                continue
+            }
+            empty = 0
             for (i in 0 until msgs.length()) parse(msgs.getJSONObject(i))?.let { out.add(it) }
             next = msgs.getJSONObject(msgs.length() - 1).getLong("id")
         }
-        return Page(out, next, empty >= 2 || out.isEmpty())
+        return Page(out, next, empty >= 4)
     }
 
     suspend fun search(q: String): List<WFile> = coroutineScope {
