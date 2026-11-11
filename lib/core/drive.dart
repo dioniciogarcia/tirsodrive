@@ -1005,6 +1005,7 @@ class Drive extends ChangeNotifier {
       bySource.putIfAbsent(f.chatId, () => []).add(f);
     }
     for (final entry in bySource.entries) {
+      entry.value.sort((a, b) => a.messageId.compareTo(b.messageId)); // Telegram needs ascending ids (and the answers come back in that order)
       for (var i = 0; i < entry.value.length; i += 50) {
         final chunk = entry.value.sublist(i, (i + 50).clamp(0, entry.value.length));
         try {
@@ -1012,7 +1013,7 @@ class Drive extends ChangeNotifier {
             '@type': 'forwardMessages',
             'chat_id': dest,
             'from_chat_id': entry.key,
-            'message_ids': (chunk.map((f) => f.messageId).toList()..sort()), // Telegram needs ascending order
+            'message_ids': chunk.map((f) => f.messageId).toList(),
             'send_copy': true, // a clean copy: no "Forwarded from"
             'remove_caption': removeCaption,
           });
