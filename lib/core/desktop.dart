@@ -116,7 +116,8 @@ class DesktopHost with TrayListener, WindowListener {
     if (!_ready) return;
     _syncFlag();
     final active = d.transfers.where((x) => !x.finished).length;
-    final tip = active == 0 ? 'TirsoDrive' : 'TirsoDrive · ${t('tray_active', {'n': active})}';
+    final upd = d.updater.available ? ' · ${t('upd_tray', {'v': d.updater.latest})}' : '';
+    final tip = (active == 0 ? 'TirsoDrive' : 'TirsoDrive · ${t('tray_active', {'n': active})}') + upd;
     if (tip != _lastTip) {
       _lastTip = tip;
       trayManager.setToolTip(tip).catchError((_) {});
@@ -125,6 +126,7 @@ class DesktopHost with TrayListener, WindowListener {
 
   Future<void> _menu() async {
     await trayManager.setContextMenu(Menu(items: [
+      if (d.updater.available) MenuItem(key: 'update', label: t('upd_tray', {'v': d.updater.latest})),
       MenuItem(key: 'open', label: t('tray_open')),
       MenuItem(key: 'pause', label: d.paused ? t('tray_resume') : t('tray_pause')),
       MenuItem.separator(),
@@ -224,6 +226,9 @@ class DesktopHost with TrayListener, WindowListener {
     switch (menuItem.key) {
       case 'open':
         showMain();
+        break;
+      case 'update':
+        showMain(); // the Settings page has the "Update now" button (it asks first if transfers are running)
         break;
       case 'pause':
         d.togglePause();

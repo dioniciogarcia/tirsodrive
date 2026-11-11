@@ -149,7 +149,7 @@ class _DesktopShellState extends State<DesktopShell> {
           _navItem('programs', t('prog_title'), C.accentSoft),
           _navItem('sync', t('sync_title'), C.green, trailing: d.sync.pairs.isEmpty ? null : '${d.sync.pairs.length}'),
           _navItem('transfers', t('nav_transfers'), C.accentSoft, trailing: active > 0 ? '$active' : null),
-          _navItem('settings', t('nav_settings'), C.label),
+          _navItem('settings', t('nav_settings'), d.updater.available ? C.green : C.label, trailing: d.updater.available ? '●' : null),
         ],
       ),
     );

@@ -20,8 +20,8 @@ android {
         applicationId = "com.tirso.tirsodrive"
         minSdk = 30
         targetSdk = 34
-        versionCode = 22
-        versionName = "0.13.2"
+        versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 1400
+        versionName = (project.findProperty("appVersionName") as String?) ?: "0.14.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 

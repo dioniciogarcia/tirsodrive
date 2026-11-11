@@ -452,7 +452,32 @@ fun ProfileScreen(s: Strings) {
         if (!me?.phone.isNullOrEmpty()) item { Text("+${me!!.phone}", color = Muted, fontSize = 12.sp) }
         item { Text("${Tg.groups.count { it.chatId != 0L }} ${if (Tg.es) "bibliotecas" else "libraries"}", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
         if (Tg.note.isNotEmpty()) item { Text(Tg.note, color = Muted, fontSize = 9.sp) }
+        item { UpdateRow(s) }
         item { Chip(onClick = { Tg.refresh() }, label = { Text(s.refresh) }, colors = ChipDefaults.secondaryChipColors(), modifier = Modifier.padding(top = 8.dp).fillMaxSize()) }
         item { Chip(onClick = { Tg.signOut() }, label = { Text(s.signOut) }, colors = ChipDefaults.chipColors(backgroundColor = Card), modifier = Modifier.fillMaxSize()) }
+    }
+}
+
+@Composable
+fun UpdateRow(s: Strings) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { if (Upd.status.isEmpty()) Upd.check(ctx) else if (Upd.installed.isEmpty()) Upd.check(ctx) }
+    val st = Upd.status
+    val label = when {
+        st == "checking" -> s.loading
+        st == "downloading" -> "${(Upd.progress * 100).toInt()}%"
+        st == "installing" -> s.loading
+        st == "available" -> "${s.updAvailable}: ${Upd.latest}"
+        st == "error:permission" -> s.allowInstall
+        st.startsWith("error:") -> st.removePrefix("error:").take(60)
+        else -> s.upToDate
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 6.dp)) {
+        Text("${s.version} ${Upd.installed}", color = Muted, fontSize = 11.sp)
+        Text(label, color = if (st == "available") Accent else Muted, fontSize = 11.sp, textAlign = TextAlign.Center)
+        if (st == "available" || st == "error:permission") Chip(onClick = { scope.launch { Upd.install(ctx) } }, label = { Text(s.updateNow) }, colors = ChipDefaults.primaryChipColors(backgroundColor = Accent), modifier = Modifier.padding(top = 4.dp))
+        else Chip(onClick = { scope.launch { Upd.check(ctx) } }, label = { Text(s.checkUpdates) }, colors = ChipDefaults.secondaryChipColors(), modifier = Modifier.padding(top = 4.dp))
+        Text(s.updNote, color = Muted, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp))
     }
 }

@@ -125,6 +125,40 @@ class MainActivity : FlutterFragmentActivity() {
                         runOnUiThread { result.success(res) }
                     }.start()
                 }
+                "apkInfo" -> {
+                    try {
+                        val path = call.argument<String>("path")!!
+                        val pi = packageManager.getPackageArchiveInfo(path, 0)
+                        if (pi == null) result.success(null)
+                        else {
+                            val mine = packageManager.getPackageInfo(packageName, 0)
+                            result.success(mapOf("package" to pi.packageName, "versionCode" to pi.longVersionCode,
+                                "versionName" to (pi.versionName ?: ""), "installedVersionCode" to mine.longVersionCode))
+                        }
+                    } catch (e: Exception) { result.success(null) }
+                }
+                "canInstallApks" -> result.success(Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls())
+                "openInstallSettings" -> {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:$packageName")))
+                    } catch (_: Exception) {
+                        try { startActivity(Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)) } catch (_: Exception) {}
+                    }
+                    result.success(true)
+                }
+                "installApk" -> {
+                    try {
+                        val f = java.io.File(call.argument<String>("path")!!)
+                        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", f)
+                        startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+                        result.success(true)
+                    } catch (e: Exception) { result.error("install", e.message, null) }
+                }
+                "openUrl" -> {
+                    try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(call.argument<String>("url")!!)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                    result.success(true)
+                }
                 "isTv" -> {
                     val ui = getSystemService(android.content.Context.UI_MODE_SERVICE) as android.app.UiModeManager
                     result.success(ui.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION ||

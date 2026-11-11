@@ -1,0 +1,239 @@
+name: Build and release
+
+# Every push to main that changes the app compiles Windows + Android (phone/TV) + Wear OS and publishes
+# them in the GitHub Release "v<version>" (version = pubspec.yaml). Pushing the same version again overwrites the files.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'tools/**'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.47.9'
+  PYTHONUTF8: '1'
+  # Same TDLib (1.8.65) on every platform, so all apps speak the same Telegram API.
+  TDLIB_COMMIT: a8f21f5230172634becc1739050ef23ecd6ea291
+  TDLIB_ANDROID_URL: https://github.com/up9cloud/android-libtdjson/releases/download/v1.8.65/libs.tar.gz
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 'Read the version (single source - pubspec.yaml)'
+        id: v
+        run: |
+          V=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/version:\s*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          IFS=. read MA MI PA <<< "$V"
+          CODE=$((MA*10000 + MI*100 + PA))
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          APP=$(grep -m1 "const String appVersion" lib/core/drive.dart | sed -E "s/.*'([0-9.]+)'.*/\1/")
+          if [ "$APP" != "$V" ]; then echo "::error::pubspec.yaml says $V but lib/core/drive.dart appVersion says $APP"; exit 1; fi
+          echo "Version $V (Android versionCode $CODE)"
+      - name: 'Release notes from the README section for this version'
+        run: python3 tools/release_notes.py "${{ steps.v.outputs.version }}" > notes.md
+      - uses: actions/upload-artifact@v4
+        with: { name: notes, path: notes.md }
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---------- Telegram library (tdjson.dll) — built once, then cached ----------
+      - name: Restore cached TDLib
+        id: tdcache
+        uses: actions/cache@v4
+        with:
+          path: windows/tdlib
+          key: tdlib-win64-${{ env.TDLIB_COMMIT }}-v1
+
+      - name: Build TDLib
+        if: steps.tdcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          & "$vcpkg\vcpkg.exe" install gperf:x64-windows openssl:x64-windows zlib:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg failed" }
+          git init td
+          cd td
+          git remote add origin https://github.com/tdlib/td.git
+          git fetch --depth 1 origin $env:TDLIB_COMMIT
+          git checkout FETCH_HEAD
+          New-Item -ItemType Directory build | Out-Null
+          cd build
+          cmake -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DGPERF_EXECUTABLE="$vcpkg\installed\x64-windows\tools\gperf\gperf.exe" `
+            -DTD_ENABLE_LTO=OFF ..
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
+          cmake --build . --target tdjson --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw "TDLib build failed" }
+          New-Item -ItemType Directory -Force ..\..\windows\tdlib | Out-Null
+          Copy-Item Release\*.dll ..\..\windows\tdlib\
+          Get-ChildItem ..\..\windows\tdlib
+
+      - name: Check TDLib
+        shell: pwsh
+        run: |
+          if (-not (Test-Path windows\tdlib\tdjson.dll)) { throw "tdjson.dll missing" }
+
+      # ---------- Flutter app ----------
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Build TirsoDrive for Windows
+        shell: pwsh
+        run: |
+          flutter config --no-analytics
+          flutter pub get
+          flutter build windows --release
+          if ($LASTEXITCODE -ne 0) { throw "flutter build failed" }
+
+      - name: Add Microsoft C++ runtime files
+        shell: pwsh
+        run: |
+          $out = "build\windows\x64\runner\Release"
+          foreach ($f in @("msvcp140.dll","msvcp140_1.dll","vcruntime140.dll","vcruntime140_1.dll")) {
+            if (Test-Path "C:\Windows\System32\$f") { Copy-Item "C:\Windows\System32\$f" $out -Force }
+          }
+
+      # ---------- Installer + portable zip (fixed names, so the app's updater always finds them) ----------
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ needs.version.outputs.version }}" installer\tirsodrive.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer failed" }
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath "installer\Output\TirsoDrive-Windows-portable.zip"
+          Get-ChildItem installer\Output
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: installer/Output/*
+          retention-days: 30
+
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: 'Telegram library for Android (TDLib 1.8.65, prebuilt)'
+        run: |
+          mkdir libs && curl -fsSL "$TDLIB_ANDROID_URL" | tar -xz -C libs
+          for m in app wear; do
+            for abi in arm64-v8a armeabi-v7a; do
+              mkdir -p android/$m/src/main/jniLibs/$abi
+              cp libs/libs/$abi/libtdjson.so android/$m/src/main/jniLibs/$abi/
+            done
+          done
+
+      # The APK must always be signed with the SAME key or Android refuses the update.
+      - name: 'Signing key (from GitHub Secrets)'
+        id: sign
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KEY_ALIAS" ]; then
+            echo "$KS_B64" | base64 -d > android/app/tirsodrive-release.jks
+            printf 'storeFile=tirsodrive-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KS_PASS" "$KEY_ALIAS" "${KEY_PASS:-$KS_PASS}" > android/key.properties
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Signing secrets are missing: building a TEST apk that will NOT be published (see HANDOFF.md, 'GitHub Secrets')."
+            keytool -genkeypair -keystore android/app/tirsodrive-release.jks -storepass testtest -keypass testtest -alias test -keyalg RSA -keysize 2048 -validity 100 -dname "CN=test"
+            printf 'storeFile=tirsodrive-release.jks\nstorePassword=testtest\nkeyAlias=test\nkeyPassword=testtest\n' > android/key.properties
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check and test
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Build phone / tablet / TV APK
+        run: flutter build apk --release --build-name ${{ needs.version.outputs.version }} --build-number ${{ needs.version.outputs.code }}
+
+      - name: Build watch APK
+        working-directory: android
+        run: ./gradlew :wear:assembleRelease -PappVersionName=${{ needs.version.outputs.version }} -PappVersionCode=${{ needs.version.outputs.code }}
+
+      - name: 'Name the files (fixed names for the updaters)'
+        run: |
+          mkdir out
+          cp build/app/outputs/flutter-apk/app-release.apk out/TirsoDrive.apk
+          cp build/wear/outputs/apk/release/wear-release.apk out/TirsoDrive-Wear.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.sign.outputs.signed == 'true' && 'android' || 'android-UNSIGNED-test' }}
+          path: out/*
+          retention-days: 30
+
+  release:
+    needs: [version, windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: notes, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: windows, path: dist }
+      - uses: actions/download-artifact@v4
+        if: needs.android.outputs.signed == 'true'
+        with: { name: android, path: dist }
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.version.outputs.version }}
+        run: |
+          ls -la dist
+          TAG="v$V"
+          FILES=$(ls dist/* | grep -v 'notes.md' | tr '\n' ' ')
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "TirsoDrive $V" --notes-file dist/notes.md --latest
+            gh release upload "$TAG" $FILES --clobber
+          else
+            gh release create "$TAG" $FILES --title "TirsoDrive $V" --notes-file dist/notes.md --target "$GITHUB_SHA" --latest
+          fi
+          if [ "${{ needs.android.outputs.signed }}" != "true" ]; then
+            echo "::warning::Android files were NOT published because the signing secrets are missing."
+          fi

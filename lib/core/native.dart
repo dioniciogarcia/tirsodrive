@@ -205,6 +205,42 @@ class NativeBridge {
     } catch (_) {}
   }
 
+  // ---- update kit helpers
+  static Future<Map<String, dynamic>?> apkInfo(String path) async {
+    try {
+      final r = await _ch.invokeMethod('apkInfo', {'path': path});
+      return r == null ? null : Map<String, dynamic>.from(r as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> canInstallApks() async {
+    try {
+      return (await _ch.invokeMethod('canInstallApks')) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> openInstallSettings() async {
+    try {
+      await _ch.invokeMethod('openInstallSettings');
+    } catch (_) {}
+  }
+
+  static Future<void> installApk(String path) => _ch.invokeMethod('installApk', {'path': path});
+
+  static Future<void> openUrl(String url) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('rundll32', ['url.dll,FileProtocolHandler', url]);
+      } else {
+        await _ch.invokeMethod('openUrl', {'url': url});
+      }
+    } catch (_) {}
+  }
+
   static Future<void> serviceStop() async {
     if (!Platform.isAndroid) return;
     try {

@@ -1,4 +1,4 @@
-; TirsoDrive Windows installer (Inno Setup). Built automatically by .github/workflows/windows.yml
+; TirsoDrive Windows installer (Inno Setup). Built automatically by .github/workflows/release.yml
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
@@ -13,7 +13,7 @@ DefaultGroupName=TirsoDrive
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=Output
-OutputBaseFilename=TirsoDrive-Setup-{#AppVersion}
+OutputBaseFilename=TirsoDrive-Setup
 SetupIconFile=..\windows\runner\resources\app_icon.ico
 UninstallDisplayIcon={app}\TirsoDrive.exe
 Compression=lzma2
@@ -39,3 +39,5 @@ Name: "{autodesktop}\TirsoDrive"; Filename: "{app}\TirsoDrive.exe"; Tasks: deskt
 
 [Run]
 Filename: "{app}\TirsoDrive.exe"; Description: "{cm:LaunchProgram,TirsoDrive}"; Flags: nowait postinstall skipifsilent
+; after a silent update (Update now inside the app) start the new version again
+Filename: "{app}\TirsoDrive.exe"; Flags: nowait; Check: WizardSilent

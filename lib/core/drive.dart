@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../td/td_client.dart';
 import 'categories.dart';
 import 'native.dart';
+import 'updater.dart';
 import 'programs.dart';
 import 'stream_server.dart';
 import 'sync.dart';
@@ -24,7 +25,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.12.2';
+const String appVersion = '0.14.0';
 
 class DriveChannel {
   final int chatId;
@@ -244,8 +245,23 @@ class Drive extends ChangeNotifier {
   final StreamController<String> _messages = StreamController.broadcast();
   Stream<String> get messages => _messages.stream;
 
+  /// "Check for updates / Update now" (see updater.dart)
+  late final Updater updater = Updater(
+    installed: appVersion,
+    transfersRunning: () => transfers.any((x) => !x.finished),
+    exitApp: () async {
+      if (desktop != null) {
+        await desktop!.quit();
+      } else {
+        exit(0);
+      }
+    },
+    onChange: notifyListeners,
+  );
+
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    unawaited(updater.init().then((_) => Timer(const Duration(seconds: 6), updater.autoCheckNow)));
     final sys = PlatformDispatcher.instance.locale.languageCode;
     lang = _prefs.getString('lang') ?? (sys == 'es' ? 'es' : 'en');
     appLang = lang;

@@ -74,7 +74,7 @@ object Tg {
                         put("system_language_code", Locale.getDefault().language)
                         put("device_model", "TirsoDrive (Watch)")
                         put("system_version", "Wear OS")
-                        put("application_version", "0.13.2")
+                        put("application_version", app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "")
                     }
                     "authorizationStateWaitPhoneNumber" -> {
                         auth = Auth.Qr(null)

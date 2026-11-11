@@ -9,6 +9,7 @@ import '../core/strings.dart';
 import 'lock_screen.dart';
 import 'programs_screen.dart';
 import 'sync_screen.dart';
+import 'update_section.dart';
 import 'theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -88,6 +89,10 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Text(t('settings_title'), style: TextStyle(fontFamily: displayFont, fontWeight: FontWeight.w700, fontSize: 24)),
                 SizedBox(height: 20),
+                SectionLabel(t('upd_title')),
+                SizedBox(height: 10),
+                UpdateSection(drive: drive),
+                SizedBox(height: 24),
                 SectionLabel(t('set_language')),
                 SizedBox(height: 10),
                 Row(children: [LangSwitch(lang: drive.lang, onChanged: drive.setLang), SizedBox(width: 12), Text(drive.lang == 'es' ? 'Español' : 'English')]),

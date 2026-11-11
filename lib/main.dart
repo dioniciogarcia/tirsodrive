@@ -150,8 +150,8 @@ class _MainShellState extends State<MainShell> {
             label: t('nav_transfers'),
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
+            icon: Badge(isLabelVisible: d.updater.available, smallSize: 9, child: Icon(Icons.settings_outlined)),
+            selectedIcon: Badge(isLabelVisible: d.updater.available, smallSize: 9, child: Icon(Icons.settings)),
             label: t('nav_settings'),
           ),
         ],
