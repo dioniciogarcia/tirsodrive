@@ -25,7 +25,7 @@ import 'strings.dart';
 /// Fill these in to build the API ID/hash into the app. Left empty, the app asks once on first launch.
 const int builtInApiId = 38798734;
 const String builtInApiHash = 'dee69532c862a3a3975eda119ba52223';
-const String appVersion = '0.14.1';
+const String appVersion = '0.14.2';
 
 class DriveChannel {
   final int chatId;
@@ -1012,7 +1012,7 @@ class Drive extends ChangeNotifier {
             '@type': 'forwardMessages',
             'chat_id': dest,
             'from_chat_id': entry.key,
-            'message_ids': chunk.map((f) => f.messageId).toList(),
+            'message_ids': (chunk.map((f) => f.messageId).toList()..sort()), // Telegram needs ascending order
             'send_copy': true, // a clean copy: no "Forwarded from"
             'remove_caption': removeCaption,
           });
@@ -1155,7 +1155,7 @@ class Drive extends ChangeNotifier {
     }
     for (final e in byChat.entries) {
       try {
-        await td.call({'@type': 'deleteMessages', 'chat_id': e.key, 'message_ids': e.value.map((f) => f.messageId).toList(), 'revoke': true});
+        await td.call({'@type': 'deleteMessages', 'chat_id': e.key, 'message_ids': (e.value.map((f) => f.messageId).toList()..sort()), 'revoke': true});
         final ids = e.value.map((f) => f.messageId).toSet();
         filesByChat[e.key]?.removeWhere((x) => ids.contains(x.messageId));
       } on TdError catch (err) {
@@ -1425,7 +1425,7 @@ class Drive extends ChangeNotifier {
           '@type': 'forwardMessages',
           'chat_id': target.chatId,
           'from_chat_id': e.key,
-          'message_ids': e.value.map((f) => f.messageId).toList(),
+          'message_ids': (e.value.map((f) => f.messageId).toList()..sort()),
           'send_copy': true,
           'remove_caption': true,
         });
