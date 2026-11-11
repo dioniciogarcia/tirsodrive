@@ -26,6 +26,11 @@ Android only accepts updates signed with the same key, so the signing key is kep
 
 The workflow uses the "Version X" section below as the release notes of version X.
 
+## Version 0.14.1
+
+- First release built and signed completely by GitHub: the phone/TV and watch APKs are now published in the release too.
+- Use Settings › Updates › Update now to get it from version 0.14.0.
+
 ## Version 0.14.0
 
 - **Check for updates / Update now** inside the apps (Settings › Updates): Windows, Android phone/tablet, Android TV (works with the remote) and the watch. Updates now come from GitHub Releases, built and signed automatically.
